@@ -2,7 +2,7 @@
   "name": "leaf-desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "Leaf — a quieter reading app, as a desktop app.",
+  "description": "Leaf \u2014 a quieter reading app, as a desktop app.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -17,17 +17,47 @@
   "build": {
     "appId": "com.omerfers.leaf",
     "productName": "Leaf",
-    "files": ["main.js", "assets/**"],
-    "directories": { "output": "dist" },
+    "files": [
+      "main.js",
+      "assets/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
     "mac": {
       "category": "public.app-category.books",
       "icon": "assets/icon.icns",
-      "target": [{ "target": "dmg", "arch": ["arm64"] }],
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
       "hardenedRuntime": false,
       "gatekeeperAssess": false
     },
-    "dmg": { "title": "Leaf", "backgroundColor": "#f2ece0" },
-    "win": { "target": ["nsis"], "icon": "assets/icon.png" },
-    "linux": { "target": ["AppImage"], "icon": "assets/icon.png", "category": "Office" }
+    "dmg": {
+      "title": "Leaf",
+      "backgroundColor": "#f2ece0"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.png"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Office"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omerfers/leaf-reader.git"
   }
 }
