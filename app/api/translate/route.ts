@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 
-export const runtime = "nodejs";
-
 /**
  * Optional DeepL proxy. Without DEEPL_API_KEY the client falls back to the
  * public Google endpoint, so the app works out of the box.
