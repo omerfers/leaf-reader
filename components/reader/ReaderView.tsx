@@ -2,12 +2,29 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getBook, getFile, getProgress, getSettings, saveProgress, saveSettings, updateBook } from "@/lib/db";
-import { DEFAULT_SETTINGS, type BookMeta, type Progress, type ReaderSettings } from "@/lib/types";
+import {
+  getBook,
+  getBookmarks,
+  getFile,
+  getProgress,
+  getSettings,
+  saveBookmarks,
+  saveProgress,
+  saveSettings,
+  updateBook,
+} from "@/lib/db";
+import {
+  DEFAULT_SETTINGS,
+  type Bookmark,
+  type BookMeta,
+  type Progress,
+  type ReaderSettings,
+} from "@/lib/types";
 import { percentLabel } from "@/lib/format";
 import { EpubReader } from "./EpubReader";
 import { PdfReader } from "./PdfReader";
 import { SettingsPanel } from "./SettingsPanel";
+import { BookmarksPanel } from "./BookmarksPanel";
 import { TranslatePopover, type SelectionInfo } from "./TranslatePopover";
 
 export function ReaderView({ id }: { id: string }) {
@@ -17,6 +34,12 @@ export function ReaderView({ id }: { id: string }) {
   const [settings, setSettings] = useState<ReaderSettings>(DEFAULT_SETTINGS);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [bookmarksOpen, setBookmarksOpen] = useState(false);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [location, setLocation] = useState<{ cfi?: string; page?: number; percent: number; excerpt: string }>(
+    { percent: 0, excerpt: "" },
+  );
+  const [jump, setJump] = useState<{ cfi?: string; page?: number; nonce: number } | undefined>(undefined);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [ready, setReady] = useState(false);
   const saveTimer = useRef<number | null>(null);
@@ -29,10 +52,11 @@ export function ReaderView({ id }: { id: string }) {
         if (!cancelled) setError("This book is not on your shelf any more.");
         return;
       }
-      const [blob, stored, storedSettings] = await Promise.all([
+      const [blob, stored, storedSettings, storedBookmarks] = await Promise.all([
         getFile(id),
         getProgress(id),
         getSettings(),
+        getBookmarks(id),
       ]);
       if (cancelled) return;
       if (!blob) {
@@ -46,6 +70,7 @@ export function ReaderView({ id }: { id: string }) {
       setBook(meta);
       setFile(blob);
       setProgress(stored);
+      setBookmarks(storedBookmarks);
       setSettings(active);
       setReady(true);
       void updateBook(id, { lastOpenedAt: Date.now() });
@@ -84,14 +109,51 @@ export function ReaderView({ id }: { id: string }) {
   }, []);
 
   const handleEpubProgress = useCallback(
-    (cfi: string, percent: number) => handleProgress({ kind: "epub", cfi, percent }),
+    (cfi: string, percent: number, excerpt: string) => {
+      setLocation({ cfi, percent, excerpt });
+      handleProgress({ kind: "epub", cfi, percent });
+    },
     [handleProgress],
   );
 
   const handlePdfProgress = useCallback(
-    (page: number, total: number) => handleProgress({ kind: "pdf", page, total }),
+    (page: number, total: number, excerpt: string) => {
+      setLocation({ page, percent: page / Math.max(1, total), excerpt });
+      handleProgress({ kind: "pdf", page, total });
+    },
     [handleProgress],
   );
+
+  const addBookmark = useCallback(async () => {
+    const label =
+      location.excerpt ||
+      (location.page ? `Page ${location.page}` : `At ${Math.round(location.percent * 100)}%`);
+    const bookmark: Bookmark = {
+      id: crypto.randomUUID(),
+      cfi: location.cfi,
+      page: location.page,
+      percent: location.percent,
+      label: label.slice(0, 120),
+      createdAt: Date.now(),
+    };
+    const next = [bookmark, ...bookmarks];
+    setBookmarks(next);
+    await saveBookmarks(id, next);
+  }, [bookmarks, id, location]);
+
+  const removeBookmark = useCallback(
+    async (bookmark: Bookmark) => {
+      const next = bookmarks.filter((item) => item.id !== bookmark.id);
+      setBookmarks(next);
+      await saveBookmarks(id, next);
+    },
+    [bookmarks, id],
+  );
+
+  const jumpToBookmark = useCallback((bookmark: Bookmark) => {
+    setBookmarksOpen(false);
+    setJump({ cfi: bookmark.cfi, page: bookmark.page, nonce: Date.now() });
+  }, []);
 
   if (error) {
     return (
@@ -145,8 +207,23 @@ export function ReaderView({ id }: { id: string }) {
 
         <div className="flex items-center gap-1">
           <IconButton
+            label="Bookmarks"
+            onClick={() => {
+              setBookmarksOpen((open) => !open);
+              setSettingsOpen(false);
+            }}
+            active={bookmarksOpen}
+          >
+            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <path d="M6 4h12v17l-6-4-6 4z" strokeLinejoin="round" />
+            </svg>
+          </IconButton>
+          <IconButton
             label="Reading settings"
-            onClick={() => setSettingsOpen((open) => !open)}
+            onClick={() => {
+              setSettingsOpen((open) => !open);
+              setBookmarksOpen(false);
+            }}
             active={settingsOpen}
           >
             <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.7">
@@ -167,6 +244,7 @@ export function ReaderView({ id }: { id: string }) {
                 file={file}
                 initialCfi={progress?.kind === "epub" ? progress.cfi : undefined}
                 settings={settings}
+                jump={jump?.cfi ? { cfi: jump.cfi, nonce: jump.nonce } : undefined}
                 onProgress={handleEpubProgress}
                 onSelect={setSelection}
                 onClearSelection={clearSelection}
@@ -176,6 +254,7 @@ export function ReaderView({ id }: { id: string }) {
                 file={file}
                 initialPage={progress?.kind === "pdf" ? progress.page : 1}
                 settings={settings}
+                jump={jump?.page ? { page: jump.page, nonce: jump.nonce } : undefined}
                 onProgress={handlePdfProgress}
                 onSelect={setSelection}
                 onClearSelection={clearSelection}
@@ -187,6 +266,16 @@ export function ReaderView({ id }: { id: string }) {
             </div>
           )}
         </div>
+
+        {bookmarksOpen && (
+          <BookmarksPanel
+            bookmarks={bookmarks}
+            onAdd={addBookmark}
+            onJump={jumpToBookmark}
+            onRemove={removeBookmark}
+            onClose={() => setBookmarksOpen(false)}
+          />
+        )}
 
         {settingsOpen && (
           <SettingsPanel

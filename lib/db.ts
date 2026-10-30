@@ -1,9 +1,10 @@
 import { del, get, set } from "idb-keyval";
-import type { BookMeta, Progress, ReaderSettings } from "./types";
+import type { Bookmark, BookMeta, Progress, ReaderSettings } from "./types";
 
 const BOOKS_KEY = "leaf.books";
 const fileKey = (id: string) => `leaf.file.${id}`;
 const progressKey = (id: string) => `leaf.progress.${id}`;
+const bookmarksKey = (id: string) => `leaf.bookmarks.${id}`;
 const SETTINGS_KEY = "leaf.settings";
 
 export async function listBooks(): Promise<BookMeta[]> {
@@ -32,6 +33,7 @@ export async function removeBook(id: string): Promise<BookMeta[]> {
   await set(BOOKS_KEY, next);
   await del(fileKey(id));
   await del(progressKey(id));
+  await del(bookmarksKey(id));
   return next;
 }
 
@@ -49,6 +51,14 @@ export async function getProgress(id: string): Promise<Progress | undefined> {
 
 export async function saveProgress(id: string, progress: Progress): Promise<void> {
   await set(progressKey(id), progress);
+}
+
+export async function getBookmarks(id: string): Promise<Bookmark[]> {
+  return (await get<Bookmark[]>(bookmarksKey(id))) ?? [];
+}
+
+export async function saveBookmarks(id: string, bookmarks: Bookmark[]): Promise<void> {
+  await set(bookmarksKey(id), bookmarks);
 }
 
 export async function getSettings(): Promise<ReaderSettings | undefined> {

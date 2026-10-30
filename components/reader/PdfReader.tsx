@@ -10,6 +10,7 @@ export function PdfReader({
   file,
   initialPage,
   settings,
+  jump,
   onProgress,
   onSelect,
   onClearSelection,
@@ -17,7 +18,8 @@ export function PdfReader({
   file: Blob;
   initialPage?: number;
   settings: ReaderSettings;
-  onProgress: (page: number, total: number) => void;
+  jump?: { page: number; nonce: number };
+  onProgress: (page: number, total: number, excerpt: string) => void;
   onSelect: (selection: SelectionInfo) => void;
   onClearSelection: () => void;
 }) {
@@ -46,7 +48,7 @@ export function PdfReader({
         docRef.current = doc;
         setTotal(doc.numPages);
         setState("ready");
-        onProgress(page, doc.numPages);
+        onProgress(page, doc.numPages, "");
       } catch (error) {
         console.error(error);
         if (!cancelled) setState("error");
@@ -145,8 +147,16 @@ export function PdfReader({
 
   useEffect(() => {
     if (state !== "ready") return;
-    onProgress(page, total);
+    const excerpt = (textRef.current?.innerText ?? "").replace(/\s+/g, " ").trim().slice(0, 140);
+    onProgress(page, total, excerpt);
   }, [onProgress, page, state, total]);
+
+  useEffect(() => {
+    if (!jump?.page || state !== "ready") return;
+    // jumping is an explicit navigation, not derived state
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPage(Math.min(Math.max(1, jump.page), total || jump.page));
+  }, [jump, state, total]);
 
   useEffect(() => {
     const stage = stageRef.current;

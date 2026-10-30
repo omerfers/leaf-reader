@@ -20,6 +20,15 @@ export interface ReaderSettings {
   targetLang: string;
 }
 
+export interface Bookmark {
+  id: string;
+  cfi?: string;
+  page?: number;
+  percent: number;
+  label: string;
+  createdAt: number;
+}
+
 export type Progress =
   | { kind: "epub"; cfi: string; percent: number }
   | { kind: "pdf"; page: number; total: number };

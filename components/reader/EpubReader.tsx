@@ -19,6 +19,7 @@ export function EpubReader({
   file,
   initialCfi,
   settings,
+  jump,
   onProgress,
   onSelect,
   onClearSelection,
@@ -26,7 +27,8 @@ export function EpubReader({
   file: Blob;
   initialCfi?: string;
   settings: ReaderSettings;
-  onProgress: (cfi: string, percent: number) => void;
+  jump?: { cfi: string; nonce: number };
+  onProgress: (cfi: string, percent: number, excerpt: string) => void;
   onSelect: (selection: SelectionInfo) => void;
   onClearSelection: () => void;
 }) {
@@ -99,7 +101,17 @@ export function EpubReader({
             : typeof start.percentage === "number"
               ? start.percentage
               : 0;
-        onProgress(start.cfi ?? "", percent);
+        let excerpt = "";
+        try {
+          const contents = rendition.getContents?.() as unknown as Array<{
+            document?: Document;
+          }>;
+          excerpt = (contents?.[0]?.document?.body?.innerText ?? "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 140);
+        } catch {}
+        onProgress(start.cfi ?? "", percent, excerpt);
       };
 
       rendition.on("relocated", report);
@@ -183,6 +195,14 @@ export function EpubReader({
     },
     [onClearSelection, turning],
   );
+
+  useEffect(() => {
+    if (!jump?.cfi) return;
+    const rendition = renditionRef.current;
+    if (!rendition) return;
+    onClearSelection();
+    void rendition.display(jump.cfi);
+  }, [jump, onClearSelection]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
