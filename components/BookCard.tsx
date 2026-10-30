@@ -1,0 +1,80 @@
+"use client";
+
+import Link from "next/link";
+import type { BookMeta, Progress } from "@/lib/types";
+import { percentLabel, progressFraction } from "@/lib/format";
+
+const FALLBACK_COLORS = [
+  ["#7c5a3a", "#3d2a17"],
+  ["#4f5f6b", "#232c33"],
+  ["#6b4f56", "#2f2126"],
+  ["#5b6b52", "#28301f"],
+  ["#7a6244", "#332716"],
+];
+
+function fallbackCover(book: BookMeta) {
+  let hash = 0;
+  for (const ch of book.title) hash = (hash + ch.charCodeAt(0)) % 997;
+  return FALLBACK_COLORS[hash % FALLBACK_COLORS.length];
+}
+
+export function BookCard({
+  book,
+  progress,
+  onDelete,
+}: {
+  book: BookMeta;
+  progress?: Progress;
+  onDelete: (book: BookMeta) => void;
+}) {
+  const fraction = progressFraction(progress);
+  const label = percentLabel(progress);
+  const [from, to] = fallbackCover(book);
+
+  return (
+    <div className="group relative">
+      <Link href={`/read/${book.id}`} className="block outline-none">
+        <div className="book-cover aspect-[2/3] transition duration-300 ease-out group-hover:-translate-y-1.5 group-hover:shadow-[0_28px_40px_-22px_rgba(36,22,8,0.8)] group-focus-visible:-translate-y-1.5">
+          {book.cover ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={book.cover} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div
+              className="flex h-full w-full flex-col justify-between p-3 text-[#f4e8d2]"
+              style={{ background: `linear-gradient(160deg, ${from}, ${to})` }}
+            >
+              <span className="text-[9px] tracking-[0.22em] uppercase opacity-70">
+                {book.format}
+              </span>
+              <span className="font-serif text-[15px] leading-tight">{book.title}</span>
+            </div>
+          )}
+          {fraction > 0.01 && (
+            <span className="absolute inset-x-0 bottom-0 h-[3px] bg-black/25">
+              <span className="block h-full bg-[var(--accent-soft)]" style={{ width: `${fraction * 100}%` }} />
+            </span>
+          )}
+        </div>
+      </Link>
+
+      <div className="mt-2.5 flex items-start justify-between gap-1">
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-medium leading-snug">{book.title}</p>
+          <p className="mt-0.5 truncate text-[11px] text-muted">
+            {book.author ?? `${book.format.toUpperCase()}${label ? ` · ${label}` : ""}`}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onDelete(book)}
+          aria-label={`Remove ${book.title}`}
+          className="shrink-0 rounded-full p-1 text-muted opacity-0 transition hover:bg-black/5 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7">
+            <path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Leaf
 
-## Getting Started
+A quiet, local-first reading app for the books you already own. EPUB and PDF,
+a Kindle-like page, and translation that appears **on the page** instead of
+throwing you into another tab.
 
-First, run the development server:
+## What it does
+
+- **Bookshelf** — drag any `.epub` or `.pdf` onto the page (or use *Add books*).
+  Each book gets a cover, author, progress and a format badge.
+- **EPUB reader** — real pagination (not scrolling), serif text, adjustable
+  size / line spacing / margins, three page colours, and a page-turn animation.
+- **PDF reader** — page-by-page with a selectable text layer and the same page
+  turn; the colour setting dims the page for night reading.
+- **Translate in place** — select a sentence and a small card appears over the
+  text with the translation. No new page, no losing your spot.
+- **Remembers you** — reading position (EPUB CFI or PDF page), last opened book
+  and all settings are stored locally.
+- **Light / sepia / dark** — for the shelf and the page; follows your system
+  theme on first run.
+- **Keyboard** — `←` / `→` (or `PageUp` / `PageDown`) to turn pages, `Esc` closes
+  the translation card.
+
+## Privacy
+
+Books never leave the device: files and covers live in **IndexedDB**, and there
+is no backend. The only network call is the translation request, which sends the
+selected text to Google's public translate endpoint (MyMemory is used as a
+fallback). Nothing is logged or stored server-side.
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Production build:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build
+npm run start
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## How it is built
 
-## Learn More
+- Next.js 16 (App Router, Turbopack) + React 19 + Tailwind CSS 4
+- [`epub.js`](https://github.com/futurepress/epub.js) for EPUB rendering/pagination
+- [`pdf.js`](https://mozilla.github.io/pdf.js/) for PDF pages and the text layer
+- `idb-keyval` for the local library
+- `next/font` (Inter for UI, Source Serif 4 for reading)
 
-To learn more about Next.js, take a look at the following resources:
+The PDF worker is vendored at `public/pdf.worker.min.mjs`. If you bump
+`pdfjs-dist`, copy the new worker from `node_modules/pdfjs-dist/build/` again.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Roadmap
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Highlights and margin notes
+- Dictionary lookup next to translation
+- Text-to-speech
+- Collections and sorting on the shelf
+- Optional end-to-end sync between devices
