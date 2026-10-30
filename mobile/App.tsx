@@ -31,7 +31,6 @@ export default function App() {
             source={{ uri: APP_URL }}
             originWhitelist={["https://*"]}
             allowFileAccess
-            allowsBackForwardNavigationGestures
             javaScriptEnabled
             domStorageEnabled
             sharedCookiesEnabled

@@ -34,6 +34,7 @@ export function PdfReader({
   const [total, setTotal] = useState(0);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [turning, setTurning] = useState<"next" | "prev" | null>(null);
+  const touchRef = useRef<{ x: number; y: number; at: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -224,6 +225,25 @@ export function PdfReader({
     <div
       ref={stageRef}
       className="relative grid h-full w-full place-items-center overflow-hidden rounded-[3px_6px_6px_3px] bg-[var(--page)] shadow-[0_24px_50px_-40px_rgba(25,15,4,0.8)]"
+      onTouchStart={(event) => {
+        if (event.touches.length !== 1) return;
+        touchRef.current = {
+          x: event.touches[0].clientX,
+          y: event.touches[0].clientY,
+          at: Date.now(),
+        };
+      }}
+      onTouchEnd={(event) => {
+        const start = touchRef.current;
+        const touch = event.changedTouches[0];
+        touchRef.current = null;
+        if (!start || !touch) return;
+        const dx = touch.clientX - start.x;
+        const dy = touch.clientY - start.y;
+        if (Date.now() - start.at < 700 && Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+          go(dx < 0 ? "next" : "prev");
+        }
+      }}
     >
       <div className="relative" style={{ filter: pdfFilter }}>
         <canvas ref={canvasRef} className="block rounded-[2px] shadow-[0_10px_30px_-22px_rgba(0,0,0,0.7)]" />
@@ -240,14 +260,14 @@ export function PdfReader({
         aria-label="Previous page"
         onClick={() => go("prev")}
         disabled={page <= 1}
-        className="absolute inset-y-0 left-0 z-10 w-[8%] cursor-w-resize disabled:cursor-default"
+        className="absolute inset-y-0 left-0 z-10 w-[14%] cursor-w-resize disabled:cursor-default sm:w-[8%]"
       />
       <button
         type="button"
         aria-label="Next page"
         onClick={() => go("next")}
         disabled={page >= total}
-        className="absolute inset-y-0 right-0 z-10 w-[8%] cursor-e-resize disabled:cursor-default"
+        className="absolute inset-y-0 right-0 z-10 w-[14%] cursor-e-resize disabled:cursor-default sm:w-[8%]"
       />
 
       {turning && <div className={`turn-sheet ${turning}`} />}

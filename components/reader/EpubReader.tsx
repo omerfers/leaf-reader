@@ -43,6 +43,8 @@ export function EpubReader({
     settingsRef.current = settings;
   }, [settings]);
 
+  const turnRef = useRef<(direction: "next" | "prev") => void>(() => {});
+
   const paint = useCallback((rendition: Rendition, current: ReaderSettings) => {
     // the rendition is torn down with the view; never touch a dead one
     if (!rendition.themes) return;
@@ -69,6 +71,7 @@ export function EpubReader({
 
   useEffect(() => {
     let cancelled = false;
+    let resizeObserver: ResizeObserver | null = null;
     const host = hostRef.current;
     if (!host) return;
 
@@ -80,9 +83,14 @@ export function EpubReader({
 
       const book = ePub(buffer);
       bookRef.current = book;
+      // epub.js takes pixels here; "100%" is read as a 100px column and the book
+      // is laid out as one enormous horizontal strip (no page turns).
+      const rect = host.getBoundingClientRect();
+      const width = Math.max(240, Math.round(rect.width));
+      const height = Math.max(240, Math.round(rect.height));
       const rendition = book.renderTo(host, {
-        width: "100%",
-        height: "100%",
+        width,
+        height,
         flow: "paginated",
         spread: "none",
         allowScriptedContent: false,
@@ -114,6 +122,39 @@ export function EpubReader({
         onProgress(start.cfi ?? "", percent, excerpt);
       };
 
+      // Swipes happen inside the book's iframe, so listen there and forward.
+      rendition.hooks.content.register((contents: any) => {
+        const doc: Document | undefined = contents?.document;
+        if (!doc) return;
+        let startX = 0;
+        let startY = 0;
+        let startedAt = 0;
+        doc.addEventListener(
+          "touchstart",
+          (event: TouchEvent) => {
+            if (event.touches.length !== 1) return;
+            startX = event.touches[0].clientX;
+            startY = event.touches[0].clientY;
+            startedAt = Date.now();
+          },
+          { passive: true },
+        );
+        doc.addEventListener(
+          "touchend",
+          (event: TouchEvent) => {
+            const touch = event.changedTouches[0];
+            if (!touch) return;
+            const dx = touch.clientX - startX;
+            const dy = touch.clientY - startY;
+            const quick = Date.now() - startedAt < 700;
+            if (quick && Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+              turnRef.current(dx < 0 ? "next" : "prev");
+            }
+          },
+          { passive: true },
+        );
+      });
+
       rendition.on("relocated", report);
 
       rendition.on("selected", (cfiRange: string, contents: any) => {
@@ -136,6 +177,16 @@ export function EpubReader({
         });
       });
 
+      resizeObserver = new ResizeObserver(() => {
+        const box = host.getBoundingClientRect();
+        const w = Math.max(240, Math.round(box.width));
+        const h = Math.max(240, Math.round(box.height));
+        try {
+          (rendition as unknown as { resize: (w: number, h: number) => void }).resize(w, h);
+        } catch {}
+      });
+      resizeObserver.observe(host);
+
       try {
         await rendition.display(initialCfi || undefined);
         if (!cancelled) setState("ready");
@@ -157,6 +208,7 @@ export function EpubReader({
 
     return () => {
       cancelled = true;
+      resizeObserver?.disconnect();
       const deadRendition = renditionRef.current;
       const deadBook = bookRef.current;
       renditionRef.current = null;
@@ -205,6 +257,10 @@ export function EpubReader({
   }, [jump, onClearSelection]);
 
   useEffect(() => {
+    turnRef.current = turn;
+  }, [turn]);
+
+  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "ArrowRight" || event.key === "PageDown") {
         event.preventDefault();
@@ -227,13 +283,13 @@ export function EpubReader({
         type="button"
         aria-label="Previous page"
         onClick={() => turn("prev")}
-        className="absolute inset-y-0 left-0 z-10 w-[7%] cursor-w-resize opacity-0 focus-visible:opacity-100"
+        className="absolute inset-y-0 left-0 z-10 w-[14%] cursor-w-resize opacity-0 focus-visible:opacity-100 sm:w-[7%]"
       />
       <button
         type="button"
         aria-label="Next page"
         onClick={() => turn("next")}
-        className="absolute inset-y-0 right-0 z-10 w-[7%] cursor-e-resize opacity-0 focus-visible:opacity-100"
+        className="absolute inset-y-0 right-0 z-10 w-[14%] cursor-e-resize opacity-0 focus-visible:opacity-100 sm:w-[7%]"
       />
 
       {turning && <div className={`turn-sheet ${turning}`} />}
