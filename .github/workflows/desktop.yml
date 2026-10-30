@@ -1,0 +1,64 @@
+name: Desktop installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS (arm64)
+            os: macos-latest
+            script: build:mac
+            patterns: |
+              desktop/dist/*.dmg
+          - label: Windows
+            os: windows-latest
+            script: build:win
+            patterns: |
+              desktop/dist/*.exe
+          - label: Linux
+            os: ubuntu-latest
+            script: build:linux
+            patterns: |
+              desktop/dist/*.AppImage
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install
+        working-directory: desktop
+        run: npm ci
+
+      - name: Build
+        working-directory: desktop
+        run: npm run ${{ matrix.script }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Leaf-${{ matrix.label }}
+          path: ${{ matrix.patterns }}
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.patterns }}
