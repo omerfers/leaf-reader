@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Leaf",
+    "slug": "leaf-reader",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.omerfers.leaf"
+    },
+    "android": {
+      "package": "com.omerfers.leaf",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#8a5a34"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "leaf",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f2ece0"
+    }
+  }
+}
