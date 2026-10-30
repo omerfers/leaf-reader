@@ -1,0 +1,33 @@
+{
+  "name": "leaf-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Leaf — a quieter reading app, as a desktop app.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac --arm64",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.omerfers.leaf",
+    "productName": "Leaf",
+    "files": ["main.js", "assets/**"],
+    "directories": { "output": "dist" },
+    "mac": {
+      "category": "public.app-category.books",
+      "icon": "assets/icon.icns",
+      "target": [{ "target": "dmg", "arch": ["arm64"] }],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": { "title": "Leaf", "backgroundColor": "#f2ece0" },
+    "win": { "target": ["nsis"], "icon": "assets/icon.png" },
+    "linux": { "target": ["AppImage"], "icon": "assets/icon.png", "category": "Office" }
+  }
+}

@@ -21,6 +21,23 @@ throwing you into another tab.
 - **Keyboard** — `←` / `→` (or `PageUp` / `PageDown`) to turn pages, `Esc` closes
   the translation card.
 
+## Desktop app
+
+A downloadable macOS build lives in `desktop/` (Electron shell around the
+hosted app):
+
+```bash
+cd desktop
+npm install
+npm run build:mac   # dist/Leaf-1.0.0-arm64.dmg
+```
+
+The DMG contains `Leaf.app`; drop it in Applications. Builds are unsigned, so
+the first launch needs right-click → **Open**.
+
+You can also install the web app itself: Chrome/Edge → install icon in the
+address bar; iPhone → Share → Add to Home Screen; Android → Install app.
+
 ## Privacy
 
 Books never leave the device: files and covers live in **IndexedDB**, and there

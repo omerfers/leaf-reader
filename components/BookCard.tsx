@@ -73,7 +73,7 @@ export function BookCard({
           type="button"
           onClick={() => onDelete(book)}
           aria-label={`Remove ${book.title}`}
-          className="shelf-delete shrink-0 rounded-full p-1 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100"
+          className="shelf-delete shrink-0 rounded-full p-1 opacity-100 transition focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
         >
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
             <path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" strokeLinecap="round" strokeLinejoin="round" />
