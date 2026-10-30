@@ -1,10 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BookCard } from "@/components/BookCard";
 import { listBooks, removeBook, saveBook, getProgress } from "@/lib/db";
 import { ingestFile } from "@/lib/ingest";
 import type { BookMeta, Progress } from "@/lib/types";
+
+function useColumns() {
+  const [columns, setColumns] = useState(4);
+  useEffect(() => {
+    const measure = () => {
+      const width = window.innerWidth;
+      if (width < 520) setColumns(2);
+      else if (width < 760) setColumns(3);
+      else if (width < 1020) setColumns(4);
+      else if (width < 1280) setColumns(5);
+      else setColumns(6);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+  return columns;
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += size) rows.push(items.slice(i, i + size));
+  return rows;
+}
 
 export default function ShelfPage() {
   const [books, setBooks] = useState<BookMeta[]>([]);
@@ -14,6 +38,8 @@ export default function ShelfPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const columns = useColumns();
+  const rows = useMemo(() => chunk(books, columns), [books, columns]);
 
   const refresh = useCallback(async () => {
     const stored = await listBooks();
@@ -80,10 +106,10 @@ export default function ShelfPage() {
         if (event.dataTransfer.files.length) await addFiles(event.dataTransfer.files);
       }}
     >
-      <div className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-20 sm:px-8">
-        <header className="flex flex-wrap items-end justify-between gap-4 pt-10 pb-8 sm:pt-14">
+      <div className="relative z-10 mx-auto w-full max-w-5xl px-5 pb-16 sm:px-8">
+        <header className="flex flex-wrap items-end justify-between gap-4 pt-10 pb-7 sm:pt-12">
           <div>
-            <h1 className="font-serif text-[42px] leading-none tracking-tight sm:text-[54px]">
+            <h1 className="font-serif text-[42px] leading-none tracking-tight sm:text-[52px]">
               Leaf
             </h1>
             <p className="mt-2 text-[11px] tracking-[0.24em] text-muted uppercase">
@@ -119,37 +145,54 @@ export default function ShelfPage() {
           </div>
         </header>
 
-        <div aria-hidden className="mb-8 h-[6px] rounded-full bg-gradient-to-b from-[var(--shelf-top)] via-[var(--shelf-mid)] to-[var(--shelf-edge)] shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_14px_20px_-14px_rgba(0,0,0,0.8)]" />
-
         {busy && (
-          <p className="mb-6 text-xs text-muted" role="status">
+          <p className="mb-4 text-xs text-muted" role="status">
             Importing {busy}…
           </p>
         )}
 
-        {loading ? (
-          <div className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="aspect-[2/3] rounded-[3px_7px_7px_3px] bg-[var(--surface-2)]" />
-                <div className="mt-3 h-3 w-3/4 rounded bg-[var(--surface-2)]" />
+        <div className="bookcase">
+          <div className="cabinet-inner">
+            {loading ? (
+              <div className="shelf-row">
+                {Array.from({ length: columns }).map((_, i) => (
+                  <div key={i} className="shelf-book">
+                    <div className="book-cover aspect-[2/3] animate-pulse bg-black/30" />
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : books.length === 0 ? (
+              <EmptyShelf onAdd={() => inputRef.current?.click()} />
+            ) : (
+              rows.map((row, rowIndex) => (
+                <div key={rowIndex}>
+                  <div className="shelf-row">
+                    {row.map((book) => (
+                      <BookCard
+                        key={book.id}
+                        book={book}
+                        progress={progress[book.id]}
+                        onDelete={handleDelete}
+                      />
+                    ))}
+                  </div>
+                  <div className="shelf-plank" />
+                </div>
+              ))
+            )}
+            {!loading && books.length === 0 && <div className="shelf-plank" />}
           </div>
-        ) : books.length === 0 ? (
-          <EmptyShelf onAdd={() => inputRef.current?.click()} />
-        ) : (
-          <div className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {books.map((book) => (
-              <BookCard
-                key={book.id}
-                book={book}
-                progress={progress[book.id]}
-                onDelete={handleDelete}
-              />
-            ))}
+
+          <div className="cabinet-foot">
+            {books.length === 0
+              ? "No books yet"
+              : `${books.length} ${books.length === 1 ? "volume" : "volumes"} · stored on this device`}
           </div>
-        )}
+        </div>
+
+        <p className="mt-6 text-center text-[11px] text-muted">
+          Drop an EPUB or PDF anywhere · your books never leave this device
+        </p>
       </div>
     </div>
   );
@@ -191,23 +234,24 @@ function ThemeToggle({
 
 function EmptyShelf({ onAdd }: { onAdd: () => void }) {
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center rounded-lg border border-dashed border-[var(--line)] bg-[var(--surface)]/40 px-8 py-16 text-center">
-      <svg viewBox="0 0 24 24" className="h-10 w-10 text-[var(--accent-soft)]" fill="none" stroke="currentColor" strokeWidth="1.2">
-        <path d="M4 19.5A2.5 2.5 0 016.5 17H20V4H6.5A2.5 2.5 0 004 6.5v13z" strokeLinejoin="round" />
-        <path d="M8 7h8M8 11h6" strokeLinecap="round" />
-      </svg>
-      <h2 className="mt-4 font-serif text-2xl">Nothing here yet</h2>
-      <p className="mt-2 text-sm leading-relaxed text-muted">
-        Drop an EPUB or PDF anywhere on this page, or add one from your library.
-        Books stay on this device.
-      </p>
-      <button
-        type="button"
-        onClick={onAdd}
-        className="mt-5 rounded-full border border-[var(--accent)] px-4 py-2 text-xs font-medium text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-white"
-      >
-        Add your first book
-      </button>
+    <div className="shelf-row">
+      <div className="flex w-full max-w-md flex-col items-center rounded-lg border border-dashed border-white/15 bg-black/20 px-8 py-14 text-center">
+        <svg viewBox="0 0 24 24" className="h-10 w-10 text-[#c8a87f]" fill="none" stroke="currentColor" strokeWidth="1.2">
+          <path d="M4 19.5A2.5 2.5 0 016.5 17H20V4H6.5A2.5 2.5 0 004 6.5v13z" strokeLinejoin="round" />
+          <path d="M8 7h8M8 11h6" strokeLinecap="round" />
+        </svg>
+        <h2 className="mt-4 font-serif text-2xl text-[#f4e9d6]">Nothing here yet</h2>
+        <p className="mt-2 max-w-[34ch] text-sm leading-relaxed text-[#f4e9d6]/55">
+          Drop an EPUB or PDF anywhere on this page, or add one from your library.
+        </p>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="mt-5 rounded-full border border-[#c8a87f]/60 px-4 py-2 text-xs font-medium text-[#e6c9a0] transition hover:bg-[#c8a87f]/15"
+        >
+          Add your first book
+        </button>
+      </div>
     </div>
   );
 }

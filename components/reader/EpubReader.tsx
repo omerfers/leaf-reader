@@ -42,6 +42,8 @@ export function EpubReader({
   }, [settings]);
 
   const paint = useCallback((rendition: Rendition, current: ReaderSettings) => {
+    // the rendition is torn down with the view; never touch a dead one
+    if (!rendition.themes) return;
     const palette = PALETTES[current.theme];
     rendition.themes.register("leaf", {
       body: {
@@ -127,9 +129,12 @@ export function EpubReader({
         if (!cancelled) setState("ready");
         // epub.js needs a location index before it can give a percentage.
         book.ready
-          .then(() => book.locations.generate(1600))
           .then(() => {
-            if (cancelled) return;
+            if (cancelled) return undefined;
+            return book.locations.generate(1600);
+          })
+          .then(() => {
+            if (cancelled || !renditionRef.current) return;
             report(rendition.currentLocation());
           })
           .catch(() => {});
@@ -140,14 +145,23 @@ export function EpubReader({
 
     return () => {
       cancelled = true;
-      try {
-        renditionRef.current?.destroy();
-      } catch {}
-      try {
-        bookRef.current?.destroy();
-      } catch {}
+      const deadRendition = renditionRef.current;
+      const deadBook = bookRef.current;
       renditionRef.current = null;
       bookRef.current = null;
+      // epub.js keeps opening the archive after renderTo(); destroying too early
+      // leaves it calling into a half-built Book (e.g. resources.replaceCss).
+      void (async () => {
+        try {
+          await deadBook?.ready;
+        } catch {}
+        try {
+          deadRendition?.destroy();
+        } catch {}
+        try {
+          deadBook?.destroy();
+        } catch {}
+      })();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file]);

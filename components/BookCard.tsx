@@ -32,9 +32,9 @@ export function BookCard({
   const [from, to] = fallbackCover(book);
 
   return (
-    <div className="group relative">
-      <Link href={`/read/${book.id}`} className="block outline-none">
-        <div className="book-cover aspect-[2/3] transition duration-300 ease-out group-hover:-translate-y-1.5 group-hover:shadow-[0_28px_40px_-22px_rgba(36,22,8,0.8)] group-focus-visible:-translate-y-1.5">
+    <div className="shelf-book group relative">
+      <Link href={`/read/${book.id}`} className="block outline-none" aria-label={`Read ${book.title}`}>
+        <div className="book-cover aspect-[2/3]">
           {book.cover ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={book.cover} alt="" className="h-full w-full object-cover" />
@@ -50,17 +50,22 @@ export function BookCard({
             </div>
           )}
           {fraction > 0.01 && (
-            <span className="absolute inset-x-0 bottom-0 h-[3px] bg-black/25">
-              <span className="block h-full bg-[var(--accent-soft)]" style={{ width: `${fraction * 100}%` }} />
+            <span className="absolute inset-x-0 bottom-0 z-[2] h-[3px] bg-black/25">
+              <span
+                className="block h-full bg-[#e6c9a0]"
+                style={{ width: `${fraction * 100}%` }}
+              />
             </span>
           )}
         </div>
       </Link>
 
-      <div className="mt-2.5 flex items-start justify-between gap-1">
-        <div className="min-w-0">
-          <p className="truncate text-[13px] font-medium leading-snug">{book.title}</p>
-          <p className="mt-0.5 truncate text-[11px] text-muted">
+      <div className="mt-2 flex items-start gap-1">
+        <div className="min-w-0 flex-1">
+          <p className="shelf-title" title={book.title}>
+            {book.title}
+          </p>
+          <p className="shelf-meta">
             {book.author ?? `${book.format.toUpperCase()}${label ? ` · ${label}` : ""}`}
           </p>
         </div>
@@ -68,9 +73,9 @@ export function BookCard({
           type="button"
           onClick={() => onDelete(book)}
           aria-label={`Remove ${book.title}`}
-          className="shrink-0 rounded-full p-1 text-muted opacity-0 transition hover:bg-black/5 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
+          className="shelf-delete shrink-0 rounded-full p-1 opacity-0 transition focus-visible:opacity-100 group-hover:opacity-100"
         >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7">
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
             <path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
