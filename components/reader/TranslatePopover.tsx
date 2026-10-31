@@ -6,6 +6,11 @@ import { translate, type Translation } from "@/lib/translate";
 export interface SelectionInfo {
   text: string;
   rect: { x: number; y: number; width: number; height: number };
+  /** EPUB: the selected CFI range */
+  cfiRange?: string;
+  /** PDF: page number and page-relative rectangles (0–1) */
+  page?: number;
+  rects?: Array<{ x: number; y: number; w: number; h: number }>;
 }
 
 export function TranslatePopover({

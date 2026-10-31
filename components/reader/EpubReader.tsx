@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Book, Rendition } from "epubjs";
-import type { ReaderSettings } from "@/lib/types";
+import type { Annotation, ReaderSettings } from "@/lib/types";
 import type { SelectionInfo } from "./TranslatePopover";
 
 const PALETTES: Record<ReaderSettings["theme"], { bg: string; ink: string; soft: string; accent: string }> = {
@@ -20,6 +20,7 @@ export function EpubReader({
   initialCfi,
   settings,
   jump,
+  annotations,
   onProgress,
   onSelect,
   onClearSelection,
@@ -27,7 +28,8 @@ export function EpubReader({
   file: Blob;
   initialCfi?: string;
   settings: ReaderSettings;
-  jump?: { cfi: string; nonce: number };
+  jump?: { cfi?: string; percent?: number; nonce: number };
+  annotations: Annotation[];
   onProgress: (cfi: string, percent: number, excerpt: string) => void;
   onSelect: (selection: SelectionInfo) => void;
   onClearSelection: () => void;
@@ -44,6 +46,7 @@ export function EpubReader({
   }, [settings]);
 
   const turnRef = useRef<(direction: "next" | "prev") => void>(() => {});
+  const annotationsRef = useRef<Annotation[]>([]);
 
   const paint = useCallback((rendition: Rendition, current: ReaderSettings) => {
     // the rendition is torn down with the view; never touch a dead one
@@ -118,7 +121,9 @@ export function EpubReader({
             .replace(/\s+/g, " ")
             .trim()
             .slice(0, 140);
-        } catch {}
+        } catch (error) {
+          console.error("[leaf] draw failed", error);
+        }
         onProgress(start.cfi ?? "", percent, excerpt);
       };
 
@@ -164,10 +169,20 @@ export function EpubReader({
           onClearSelection();
           return;
         }
-        const range = selection.getRangeAt(0).getBoundingClientRect();
+        const domRange = selection.getRangeAt(0);
+        const range = domRange.getBoundingClientRect();
         const frame = contents.document?.defaultView?.frameElement?.getBoundingClientRect();
+        // epub.js sometimes emits the selection without a CFI; ask the contents
+        // for one so highlights survive page turns.
+        let cfi = cfiRange;
+        if (!cfi) {
+          try {
+            cfi = contents.cfiFromRange?.(domRange);
+          } catch {}
+        }
         onSelect({
           text,
+          cfiRange: cfi,
           rect: {
             x: (frame?.left ?? 0) + range.left,
             y: (frame?.top ?? 0) + range.top,
@@ -187,9 +202,57 @@ export function EpubReader({
       });
       resizeObserver.observe(host);
 
+      const drawAnnotations = () => {
+        const contents = (rendition.getContents?.() as unknown as Array<{
+          document?: Document;
+          range?: (cfi: string) => Range | null;
+        }>)?.[0];
+        const doc = contents?.document;
+        const win = doc?.defaultView as (Window & { CSS?: { highlights?: Map<string, unknown> }; Highlight?: new (...ranges: Range[]) => { add: (r: Range) => void } }) | null;
+        const highlights = win?.CSS?.highlights;
+        if (!doc || !win || !highlights || !win.Highlight) return;
+
+        for (const name of Array.from(highlights.keys())) {
+          if (name.startsWith("leaf-")) highlights.delete(name);
+        }
+
+        let style = doc.getElementById("leaf-highlight-style");
+        if (!style) {
+          style = doc.createElement("style");
+          style.id = "leaf-highlight-style";
+          doc.head.appendChild(style);
+        }
+        const rules: string[] = [];
+
+        for (const annotation of annotationsRef.current) {
+          if (!annotation.cfi || !contents?.range) continue;
+          try {
+            const range = contents.range(annotation.cfi);
+            if (!range) continue;
+            const key = annotation.color.replace("#", "").toLowerCase();
+            const name = `leaf-${annotation.kind}-${key}`;
+            let highlight = highlights.get(name) as { add: (r: Range) => void } | undefined;
+            if (!highlight) {
+              highlight = new win.Highlight();
+              highlights.set(name, highlight);
+            }
+            highlight.add(range);
+            rules.push(
+              annotation.kind === "underline"
+                ? `::highlight(${name}){text-decoration:underline;text-decoration-thickness:2px;text-decoration-color:${annotation.color};}`
+                : `::highlight(${name}){background-color:${annotation.color}66;}`,
+            );
+          } catch {}
+        }
+        style.textContent = rules.join("\n");
+      };
+      annotationsRef.current = annotations;
+      rendition.on("rendered", drawAnnotations);
+
       try {
         await rendition.display(initialCfi || undefined);
         if (!cancelled) setState("ready");
+        drawAnnotations();
         // epub.js needs a location index before it can give a percentage.
         book.ready
           .then(() => {
@@ -249,16 +312,69 @@ export function EpubReader({
   );
 
   useEffect(() => {
-    if (!jump?.cfi) return;
+    if (!jump) return;
     const rendition = renditionRef.current;
     if (!rendition) return;
+    let target = jump.cfi;
+    if (!target && typeof jump.percent === "number") {
+      const cfi = bookRef.current?.locations?.cfiFromPercentage?.(
+        Math.min(1, Math.max(0, jump.percent)),
+      );
+      target = cfi ?? undefined;
+    }
+    if (!target) return;
     onClearSelection();
-    void rendition.display(jump.cfi);
+    void rendition.display(target);
   }, [jump, onClearSelection]);
 
   useEffect(() => {
     turnRef.current = turn;
   }, [turn]);
+
+  useEffect(() => {
+    annotationsRef.current = annotations;
+    const rendition = renditionRef.current;
+    const contents = (rendition?.getContents?.() as unknown as Array<{
+      document?: Document;
+      range?: (cfi: string) => Range | null;
+    }>)?.[0];
+    const doc = contents?.document;
+    const win = doc?.defaultView as (Window & { CSS?: { highlights?: Map<string, unknown> }; Highlight?: new (...ranges: Range[]) => { add: (r: Range) => void } }) | null;
+    const highlights = win?.CSS?.highlights;
+    if (!rendition || !doc || !win || !highlights || !win.Highlight) return;
+
+    for (const name of Array.from(highlights.keys())) {
+      if (name.startsWith("leaf-")) highlights.delete(name);
+    }
+    let style = doc.getElementById("leaf-highlight-style");
+    if (!style) {
+      style = doc.createElement("style");
+      style.id = "leaf-highlight-style";
+      doc.head.appendChild(style);
+    }
+    const rules: string[] = [];
+    for (const annotation of annotations) {
+      if (!annotation.cfi || !contents?.range) continue;
+      try {
+        const range = contents.range(annotation.cfi);
+        if (!range) continue;
+        const key = annotation.color.replace("#", "").toLowerCase();
+        const name = `leaf-${annotation.kind}-${key}`;
+        let highlight = highlights.get(name) as { add: (r: Range) => void } | undefined;
+        if (!highlight) {
+          highlight = new win.Highlight();
+          highlights.set(name, highlight);
+        }
+        highlight.add(range);
+        rules.push(
+          annotation.kind === "underline"
+            ? `::highlight(${name}){text-decoration:underline;text-decoration-thickness:2px;text-decoration-color:${annotation.color};}`
+            : `::highlight(${name}){background-color:${annotation.color}66;}`,
+        );
+      } catch {}
+    }
+    style.textContent = rules.join("\n");
+  }, [annotations]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

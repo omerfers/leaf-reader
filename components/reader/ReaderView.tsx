@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  getAnnotations,
   getBook,
   getBookmarks,
   getFile,
   getProgress,
   getSettings,
+  saveAnnotations,
   saveBookmarks,
   saveProgress,
   saveSettings,
@@ -15,6 +17,7 @@ import {
 } from "@/lib/db";
 import {
   DEFAULT_SETTINGS,
+  type Annotation,
   type Bookmark,
   type BookMeta,
   type Progress,
@@ -25,6 +28,7 @@ import { EpubReader } from "./EpubReader";
 import { PdfReader } from "./PdfReader";
 import { SettingsPanel } from "./SettingsPanel";
 import { BookmarksPanel } from "./BookmarksPanel";
+import { SelectionToolbar } from "./SelectionToolbar";
 import { TranslatePopover, type SelectionInfo } from "./TranslatePopover";
 
 export function ReaderView({ id }: { id: string }) {
@@ -36,10 +40,12 @@ export function ReaderView({ id }: { id: string }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bookmarksOpen, setBookmarksOpen] = useState(false);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [translateFor, setTranslateFor] = useState<SelectionInfo | null>(null);
   const [location, setLocation] = useState<{ cfi?: string; page?: number; percent: number; excerpt: string }>(
     { percent: 0, excerpt: "" },
   );
-  const [jump, setJump] = useState<{ cfi?: string; page?: number; nonce: number } | undefined>(undefined);
+  const [jump, setJump] = useState<{ cfi?: string; page?: number; percent?: number; nonce: number } | undefined>(undefined);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [ready, setReady] = useState(false);
   const saveTimer = useRef<number | null>(null);
@@ -52,11 +58,12 @@ export function ReaderView({ id }: { id: string }) {
         if (!cancelled) setError("This book is not on your shelf any more.");
         return;
       }
-      const [blob, stored, storedSettings, storedBookmarks] = await Promise.all([
+      const [blob, stored, storedSettings, storedBookmarks, storedAnnotations] = await Promise.all([
         getFile(id),
         getProgress(id),
         getSettings(),
         getBookmarks(id),
+        getAnnotations(id),
       ]);
       if (cancelled) return;
       if (!blob) {
@@ -71,6 +78,7 @@ export function ReaderView({ id }: { id: string }) {
       setFile(blob);
       setProgress(stored);
       setBookmarks(storedBookmarks);
+      setAnnotations(storedAnnotations);
       setSettings(active);
       setReady(true);
       void updateBook(id, { lastOpenedAt: Date.now() });
@@ -150,6 +158,28 @@ export function ReaderView({ id }: { id: string }) {
     [bookmarks, id],
   );
 
+  const addAnnotation = useCallback(
+    async (kind: Annotation["kind"], color: string) => {
+      if (!selection) return;
+      const annotation: Annotation = {
+        id: crypto.randomUUID(),
+        kind,
+        color,
+        cfi: selection.cfiRange,
+        page: selection.page,
+        rects: selection.rects,
+        text: selection.text.slice(0, 240),
+        createdAt: Date.now(),
+      };
+      const next = [...annotations, annotation];
+      setAnnotations(next);
+      await saveAnnotations(id, next);
+      setSelection(null);
+      window.getSelection()?.removeAllRanges();
+    },
+    [annotations, id, selection],
+  );
+
   const jumpToBookmark = useCallback((bookmark: Bookmark) => {
     setBookmarksOpen(false);
     setJump({ cfi: bookmark.cfi, page: bookmark.page, nonce: Date.now() });
@@ -185,9 +215,18 @@ export function ReaderView({ id }: { id: string }) {
           <p className="truncate text-[13px] font-medium leading-tight">{book?.title ?? "Opening…"}</p>
           <p className="truncate text-[11px] leading-tight text-[var(--muted)]">
             {book?.author ?? (book ? book.format.toUpperCase() : "")}
-            {progress ? ` · ${percentLabel(progress)}` : ""}
           </p>
         </div>
+
+        {book && progress && (
+          <PageJump
+            format={book.format}
+            page={location.page}
+            percent={location.percent}
+            total={progress.kind === "pdf" ? progress.total : 0}
+            onJump={(target) => setJump({ ...target, nonce: Date.now() })}
+          />
+        )}
 
         <label className="hidden items-center gap-1.5 rounded-full border border-[var(--line)] px-2 py-1 text-[11px] text-[var(--muted)] sm:flex">
           <span className="tracking-[0.12em] uppercase">Translate</span>
@@ -244,8 +283,9 @@ export function ReaderView({ id }: { id: string }) {
                 file={file}
                 initialCfi={progress?.kind === "epub" ? progress.cfi : undefined}
                 settings={settings}
-                jump={jump?.cfi ? { cfi: jump.cfi, nonce: jump.nonce } : undefined}
+                jump={jump ? { cfi: jump.cfi, percent: jump.percent, nonce: jump.nonce } : undefined}
                 onProgress={handleEpubProgress}
+                annotations={annotations}
                 onSelect={setSelection}
                 onClearSelection={clearSelection}
               />
@@ -256,6 +296,7 @@ export function ReaderView({ id }: { id: string }) {
                 settings={settings}
                 jump={jump?.page ? { page: jump.page, nonce: jump.nonce } : undefined}
                 onProgress={handlePdfProgress}
+                annotations={annotations}
                 onSelect={setSelection}
                 onClearSelection={clearSelection}
               />
@@ -298,15 +339,87 @@ export function ReaderView({ id }: { id: string }) {
         <span className="hidden sm:inline">{book?.format.toUpperCase()}</span>
       </footer>
 
-      {selection && (
-        <TranslatePopover
-          key={`${selection.text.slice(0, 24)}-${settings.targetLang}`}
+      {selection && !translateFor && (
+        <SelectionToolbar
           selection={selection}
+          onHighlight={(color) => void addAnnotation("highlight", color)}
+          onUnderline={(color) => void addAnnotation("underline", color)}
+          onTranslate={() => {
+            setTranslateFor(selection);
+            setSelection(null);
+          }}
+          onDismiss={clearSelection}
+        />
+      )}
+
+      {translateFor && (
+        <TranslatePopover
+          key={`${translateFor.text.slice(0, 24)}-${settings.targetLang}`}
+          selection={translateFor}
           targetLang={settings.targetLang}
-          onClose={clearSelection}
+          onClose={() => {
+            setTranslateFor(null);
+            clearSelection();
+          }}
         />
       )}
     </div>
+  );
+}
+
+function PageJump({
+  format,
+  page,
+  percent,
+  total,
+  onJump,
+}: {
+  format: "epub" | "pdf";
+  page?: number;
+  percent?: number;
+  total: number;
+  onJump: (target: { page?: number; percent?: number }) => void;
+}) {
+  const current = format === "pdf" ? (page ?? 1) : Math.round((percent ?? 0) * 100);
+  const [value, setValue] = useState(String(current));
+
+  useEffect(() => {
+    // keep the field in sync with the page the reader reports
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setValue(String(current));
+  }, [current]);
+
+  const apply = () => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+    if (format === "pdf") {
+      onJump({ page: Math.min(Math.max(1, Math.round(parsed)), total || 1) });
+    } else {
+      onJump({ percent: Math.min(100, Math.max(0, parsed)) / 100 });
+    }
+  };
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        apply();
+      }}
+      className="flex shrink-0 items-center gap-1 rounded-full border border-[var(--line)] px-2 py-1 text-[11px] text-[var(--muted)]"
+      title={format === "pdf" ? "Go to page" : "Go to position (%)"}
+    >
+      <span className="hidden tracking-[0.12em] uppercase sm:inline">
+        {format === "pdf" ? "Page" : "At"}
+      </span>
+      <input
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        inputMode="numeric"
+        aria-label={format === "pdf" ? "Go to page" : "Go to percentage"}
+        className="w-9 bg-transparent text-center text-[var(--ink)] outline-none"
+      />
+      <span>{format === "pdf" ? `/ ${total || "…"}` : "%"}</span>
+    </form>
   );
 }
 

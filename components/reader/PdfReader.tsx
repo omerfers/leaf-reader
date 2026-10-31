@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ReaderSettings } from "@/lib/types";
+import type { Annotation, ReaderSettings } from "@/lib/types";
 import type { SelectionInfo } from "./TranslatePopover";
 
 export function PdfReader({
@@ -11,6 +11,7 @@ export function PdfReader({
   initialPage,
   settings,
   jump,
+  annotations,
   onProgress,
   onSelect,
   onClearSelection,
@@ -19,6 +20,7 @@ export function PdfReader({
   initialPage?: number;
   settings: ReaderSettings;
   jump?: { page: number; nonce: number };
+  annotations: Annotation[];
   onProgress: (page: number, total: number, excerpt: string) => void;
   onSelect: (selection: SelectionInfo) => void;
   onClearSelection: () => void;
@@ -206,12 +208,28 @@ export function PdfReader({
   const handleSelect = () => {
     const selection = window.getSelection();
     const text = selection?.toString().replace(/\s+/g, " ").trim();
-    if (!selection || !text || selection.rangeCount === 0) {
+    const layer = textRef.current;
+    if (!selection || !text || selection.rangeCount === 0 || !layer) {
       onClearSelection();
       return;
     }
-    const rect = selection.getRangeAt(0).getBoundingClientRect();
-    onSelect({ text, rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height } });
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const box = layer.getBoundingClientRect();
+    const rects = Array.from(range.getClientRects())
+      .filter((r) => r.width > 2 && r.height > 2)
+      .map((r) => ({
+        x: (r.left - box.left) / box.width,
+        y: (r.top - box.top) / box.height,
+        w: r.width / box.width,
+        h: r.height / box.height,
+      }));
+    onSelect({
+      text,
+      page,
+      rects,
+      rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+    });
   };
 
   const pdfFilter =
@@ -253,6 +271,29 @@ export function PdfReader({
           onMouseUp={handleSelect}
           onTouchEnd={handleSelect}
         />
+
+        {annotations
+          .filter((annotation) => annotation.page === page && annotation.rects?.length)
+          .map((annotation) =>
+            annotation.rects!.map((rect, index) => (
+              <span
+                key={`${annotation.id}-${index}`}
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  left: `${rect.x * 100}%`,
+                  top: `${rect.y * 100}%`,
+                  width: `${rect.w * 100}%`,
+                  height: `${rect.h * 100}%`,
+                  borderRadius: 2,
+                  pointerEvents: "none",
+                  background: annotation.kind === "highlight" ? `${annotation.color}66` : "transparent",
+                  borderBottom:
+                    annotation.kind === "underline" ? `2px solid ${annotation.color}` : undefined,
+                }}
+              />
+            )),
+          )}
       </div>
 
       <button

@@ -46,14 +46,26 @@ async function epubMeta(file: File, _id: string, fallbackTitle: string): Promise
 
 async function loadPdf() {
   const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+  // absolute, so it also resolves inside the packaged desktop app
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    "/pdf.worker.min.mjs",
+    window.location.href,
+  ).toString();
   return pdfjs;
 }
 
 async function pdfMeta(file: File, _id: string, fallbackTitle: string): Promise<BookMeta> {
-  const pdfjs = await loadPdf();
-  const data = new Uint8Array(await file.arrayBuffer());
-  const doc = await pdfjs.getDocument({ data }).promise;
+  // A PDF that cannot be parsed still belongs on the shelf: the reader gets a
+  // second chance, and Windows/OneDrive files sometimes trip the worker.
+  let doc: Awaited<ReturnType<Awaited<ReturnType<typeof loadPdf>>["getDocument"]>["promise"]> | null = null;
+  try {
+    const pdfjs = await loadPdf();
+    const data = new Uint8Array(await file.arrayBuffer());
+    doc = await pdfjs.getDocument({ data }).promise;
+  } catch (error) {
+    console.error("Could not parse PDF metadata", error);
+    return { id: "", title: fallbackTitle, format: "pdf", addedAt: 0 };
+  }
   try {
     const page = await doc.getPage(1);
     const base = page.getViewport({ scale: 1 });

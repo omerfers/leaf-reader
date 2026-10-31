@@ -29,6 +29,18 @@ export interface Bookmark {
   createdAt: number;
 }
 
+export interface Annotation {
+  id: string;
+  kind: "highlight" | "underline";
+  color: string;
+  cfi?: string;
+  page?: number;
+  /** page-relative rectangles (0–1) for PDF annotations */
+  rects?: Array<{ x: number; y: number; w: number; h: number }>;
+  text: string;
+  createdAt: number;
+}
+
 export type Progress =
   | { kind: "epub"; cfi: string; percent: number }
   | { kind: "pdf"; page: number; total: number };

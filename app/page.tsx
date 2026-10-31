@@ -36,6 +36,7 @@ export default function ShelfPage() {
   const [theme, setTheme] = useState<"light" | "sepia" | "dark">("light");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const columns = useColumns();
@@ -70,17 +71,31 @@ export default function ShelfPage() {
   const addFiles = useCallback(
     async (files: FileList | File[]) => {
       const list = Array.from(files);
+      const failed: string[] = [];
+      setUploadError(null);
       for (let i = 0; i < list.length; i += 1) {
         const file = list[i];
         setBusy(`${file.name} (${i + 1}/${list.length})`);
         try {
           const ingested = await ingestFile(file);
-          if (ingested) await saveBook(ingested.meta, ingested.file);
+          if (!ingested) {
+            failed.push(`${file.name} (not an EPUB or PDF)`);
+            continue;
+          }
+          await saveBook(ingested.meta, ingested.file);
         } catch (error) {
           console.error("Could not import", file.name, error);
+          failed.push(file.name);
         }
       }
       setBusy(null);
+      if (failed.length) {
+        setUploadError(
+          failed.length === 1
+            ? `Could not open ${failed[0]}.`
+            : `Could not open ${failed.length} files: ${failed.join(", ")}.`,
+        );
+      }
       await refresh();
     },
     [refresh],
@@ -148,6 +163,12 @@ export default function ShelfPage() {
         {busy && (
           <p className="mb-4 text-xs text-muted" role="status">
             Importing {busy}…
+          </p>
+        )}
+
+        {uploadError && (
+          <p className="mb-4 rounded-lg border border-red-900/40 bg-red-950/40 px-3 py-2 text-xs text-red-200" role="alert">
+            {uploadError}
           </p>
         )}
 
