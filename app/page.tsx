@@ -121,7 +121,7 @@ export default function ShelfPage() {
         if (event.dataTransfer.files.length) await addFiles(event.dataTransfer.files);
       }}
     >
-      <div className="relative z-10 mx-auto w-full max-w-5xl px-5 pb-16 sm:px-8">
+      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-5xl flex-col px-5 pb-10 sm:px-8">
         <header className="flex flex-wrap items-end justify-between gap-4 pt-10 pb-7 sm:pt-12">
           <div>
             <h1 className="font-serif text-[42px] leading-none tracking-tight sm:text-[52px]">
@@ -160,60 +160,63 @@ export default function ShelfPage() {
           </div>
         </header>
 
-        {busy && (
-          <p className="mb-4 text-xs text-muted" role="status">
-            Importing {busy}…
-          </p>
-        )}
+        {/* the header stays at the top, the cabinet sits in the middle of what is left */}
+        <div className="flex flex-1 flex-col justify-center">
+          {busy && (
+            <p className="mb-4 text-center text-xs text-muted" role="status">
+              Importing {busy}…
+            </p>
+          )}
 
-        {uploadError && (
-          <p className="mb-4 rounded-lg border border-red-900/40 bg-red-950/40 px-3 py-2 text-xs text-red-200" role="alert">
-            {uploadError}
-          </p>
-        )}
+          {uploadError && (
+            <p className="mb-4 rounded-lg border border-red-900/40 bg-red-950/40 px-3 py-2 text-center text-xs text-red-200" role="alert">
+              {uploadError}
+            </p>
+          )}
 
-        <div className="bookcase">
-          <div className="cabinet-inner">
-            {loading ? (
-              <div className="shelf-row">
-                {Array.from({ length: columns }).map((_, i) => (
-                  <div key={i} className="shelf-book">
-                    <div className="book-cover aspect-[2/3] animate-pulse bg-black/30" />
-                  </div>
-                ))}
-              </div>
-            ) : books.length === 0 ? (
-              <EmptyShelf onAdd={() => inputRef.current?.click()} />
-            ) : (
-              rows.map((row, rowIndex) => (
-                <div key={rowIndex}>
-                  <div className="shelf-row">
-                    {row.map((book) => (
-                      <BookCard
-                        key={book.id}
-                        book={book}
-                        progress={progress[book.id]}
-                        onDelete={handleDelete}
-                      />
-                    ))}
-                  </div>
-                  <div className="shelf-plank" />
+          <div className="bookcase">
+            <div className="cabinet-inner">
+              {loading ? (
+                <div className="shelf-row">
+                  {Array.from({ length: columns }).map((_, i) => (
+                    <div key={i} className="shelf-book">
+                      <div className="book-cover aspect-[2/3] animate-pulse bg-black/30" />
+                    </div>
+                  ))}
                 </div>
-              ))
-            )}
-            {!loading && books.length === 0 && <div className="shelf-plank" />}
+              ) : books.length === 0 ? (
+                <EmptyShelf onAdd={() => inputRef.current?.click()} />
+              ) : (
+                rows.map((row, rowIndex) => (
+                  <div key={rowIndex}>
+                    <div className="shelf-row">
+                      {row.map((book) => (
+                        <BookCard
+                          key={book.id}
+                          book={book}
+                          progress={progress[book.id]}
+                          onDelete={handleDelete}
+                        />
+                      ))}
+                    </div>
+                    <div className="shelf-plank" />
+                  </div>
+                ))
+              )}
+              {!loading && books.length === 0 && <div className="shelf-plank" />}
+            </div>
+
+            <div className="cabinet-foot">
+              {books.length === 0
+                ? "No books yet"
+                : `${books.length} ${books.length === 1 ? "volume" : "volumes"} · stored on this device`}
+            </div>
           </div>
 
-          <div className="cabinet-foot">
-            {books.length === 0
-              ? "No books yet"
-              : `${books.length} ${books.length === 1 ? "volume" : "volumes"} · stored on this device`}
-          </div>
+          <p className="mt-6 text-center text-[11px] text-muted">
+            Drop an EPUB or PDF anywhere · your books never leave this device
+          </p>
         </div>
-
-        <p className="mt-6 text-center text-[11px] text-muted">
-          Drop an EPUB or PDF anywhere · your books never leave this device
-        </p>
       </div>
     </div>
   );
