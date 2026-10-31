@@ -28,9 +28,9 @@ export function EpubReader({
   file: Blob;
   initialCfi?: string;
   settings: ReaderSettings;
-  jump?: { cfi?: string; percent?: number; nonce: number };
+  jump?: { cfi?: string; percent?: number; page?: number; nonce: number };
   annotations: Annotation[];
-  onProgress: (cfi: string, percent: number, excerpt: string) => void;
+  onProgress: (cfi: string, percent: number, excerpt: string, page?: number, total?: number) => void;
   onSelect: (selection: SelectionInfo) => void;
   onClearSelection: () => void;
 }) {
@@ -124,7 +124,13 @@ export function EpubReader({
         } catch (error) {
           console.error("[leaf] draw failed", error);
         }
-        onProgress(start.cfi ?? "", percent, excerpt);
+        const locations = bookRef.current?.locations as unknown as
+          | { locationFromCfi?: (cfi: string) => number; total?: number }
+          | undefined;
+        const index = locations?.locationFromCfi?.(start.cfi);
+        const page = typeof index === "number" && index >= 0 ? index + 1 : undefined;
+        const total = typeof locations?.total === "number" && locations.total > 0 ? locations.total : undefined;
+        onProgress(start.cfi ?? "", percent, excerpt, page, total);
       };
 
       // Swipes happen inside the book's iframe, so listen there and forward.
@@ -316,10 +322,18 @@ export function EpubReader({
     const rendition = renditionRef.current;
     if (!rendition) return;
     let target = jump.cfi;
+    const locations = bookRef.current?.locations as unknown as
+      | {
+          cfiFromLocation?: (loc: number) => string;
+          cfiFromPercentage?: (percentage: number) => string;
+        }
+      | undefined;
+    if (!target && typeof jump.page === "number") {
+      const cfi = locations?.cfiFromLocation?.(Math.max(0, jump.page - 1));
+      target = cfi ?? undefined;
+    }
     if (!target && typeof jump.percent === "number") {
-      const cfi = bookRef.current?.locations?.cfiFromPercentage?.(
-        Math.min(1, Math.max(0, jump.percent)),
-      );
+      const cfi = locations?.cfiFromPercentage?.(Math.min(1, Math.max(0, jump.percent)));
       target = cfi ?? undefined;
     }
     if (!target) return;

@@ -54,7 +54,8 @@
       ],
       "icon": "assets/icon.png",
       "category": "Office"
-    }
+    },
+    "compression": "maximum"
   },
   "repository": {
     "type": "git",

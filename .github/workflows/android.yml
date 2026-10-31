@@ -2,8 +2,6 @@ name: Android app
 
 on:
   workflow_dispatch:
-  push:
-    tags: ["v*"]
 
 permissions:
   contents: write
@@ -36,13 +34,18 @@ jobs:
         working-directory: mobile
         run: npx expo prebuild --platform android --no-install
 
+      - name: Slim the build
+        working-directory: mobile/android
+        run: |
+          printf '\nreactNativeArchitectures=arm64-v8a\nandroid.enableBundleCompression=true\nandroid.enableShrinkResourcesInReleaseBuilds=true\n' >> gradle.properties
+
       - name: Build APK
         working-directory: mobile/android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Name the build
         working-directory: mobile/android
-        run: cp app/build/outputs/apk/debug/app-debug.apk Leaf-Android.apk
+        run: cp app/build/outputs/apk/release/app-release.apk Leaf-Android.apk
 
       - uses: actions/upload-artifact@v4
         with:
@@ -50,8 +53,10 @@ jobs:
           path: mobile/android/Leaf-Android.apk
           if-no-files-found: error
 
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Attach to the v1.0 release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v1.0
+          name: Leaf v1.0
+          make_latest: true
           files: mobile/android/Leaf-Android.apk

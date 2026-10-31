@@ -42,7 +42,7 @@ export function ReaderView({ id }: { id: string }) {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [translateFor, setTranslateFor] = useState<SelectionInfo | null>(null);
-  const [location, setLocation] = useState<{ cfi?: string; page?: number; percent: number; excerpt: string }>(
+  const [location, setLocation] = useState<{ cfi?: string; page?: number; total?: number; percent: number; excerpt: string }>(
     { percent: 0, excerpt: "" },
   );
   const [jump, setJump] = useState<{ cfi?: string; page?: number; percent?: number; nonce: number } | undefined>(undefined);
@@ -117,8 +117,8 @@ export function ReaderView({ id }: { id: string }) {
   }, []);
 
   const handleEpubProgress = useCallback(
-    (cfi: string, percent: number, excerpt: string) => {
-      setLocation({ cfi, percent, excerpt });
+    (cfi: string, percent: number, excerpt: string, page?: number, total?: number) => {
+      setLocation({ cfi, percent, excerpt, page, total });
       handleProgress({ kind: "epub", cfi, percent });
     },
     [handleProgress],
@@ -220,10 +220,9 @@ export function ReaderView({ id }: { id: string }) {
 
         {book && progress && (
           <PageJump
-            format={book.format}
             page={location.page}
             percent={location.percent}
-            total={progress.kind === "pdf" ? progress.total : 0}
+            total={book.format === "pdf" ? (progress.kind === "pdf" ? progress.total : 0) : (location.total ?? 0)}
             onJump={(target) => setJump({ ...target, nonce: Date.now() })}
           />
         )}
@@ -283,7 +282,7 @@ export function ReaderView({ id }: { id: string }) {
                 file={file}
                 initialCfi={progress?.kind === "epub" ? progress.cfi : undefined}
                 settings={settings}
-                jump={jump ? { cfi: jump.cfi, percent: jump.percent, nonce: jump.nonce } : undefined}
+                jump={jump ? { cfi: jump.cfi, percent: jump.percent, page: jump.page, nonce: jump.nonce } : undefined}
                 onProgress={handleEpubProgress}
                 annotations={annotations}
                 onSelect={setSelection}
@@ -368,35 +367,31 @@ export function ReaderView({ id }: { id: string }) {
 }
 
 function PageJump({
-  format,
   page,
   percent,
   total,
   onJump,
 }: {
-  format: "epub" | "pdf";
   page?: number;
   percent?: number;
   total: number;
   onJump: (target: { page?: number; percent?: number }) => void;
 }) {
-  const current = format === "pdf" ? (page ?? 1) : Math.round((percent ?? 0) * 100);
+  const current = page ?? Math.round((percent ?? 0) * 100);
   const [value, setValue] = useState(String(current));
+  const focused = useRef(false);
 
   useEffect(() => {
-    // keep the field in sync with the page the reader reports
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setValue(String(current));
+    if (!focused.current) setValue(String(current));
   }, [current]);
 
   const apply = () => {
     const parsed = Number(value);
-    if (!Number.isFinite(parsed)) return;
-    if (format === "pdf") {
-      onJump({ page: Math.min(Math.max(1, Math.round(parsed)), total || 1) });
-    } else {
-      onJump({ percent: Math.min(100, Math.max(0, parsed)) / 100 });
+    if (!Number.isFinite(parsed)) {
+      setValue(String(current));
+      return;
     }
+    onJump({ page: Math.min(Math.max(1, Math.round(parsed)), total || Math.round(parsed)) });
   };
 
   return (
@@ -406,19 +401,26 @@ function PageJump({
         apply();
       }}
       className="flex shrink-0 items-center gap-1 rounded-full border border-[var(--line)] px-2 py-1 text-[11px] text-[var(--muted)]"
-      title={format === "pdf" ? "Go to page" : "Go to position (%)"}
+      title="Go to page"
     >
-      <span className="hidden tracking-[0.12em] uppercase sm:inline">
-        {format === "pdf" ? "Page" : "At"}
-      </span>
+      <span className="hidden tracking-[0.12em] uppercase sm:inline">Page</span>
       <input
         value={value}
-        onChange={(event) => setValue(event.target.value)}
+        onChange={(event) => setValue(event.target.value.replace(/[^0-9]/g, ""))}
+        onFocus={(event) => {
+          focused.current = true;
+          event.currentTarget.select();
+        }}
+        onBlur={() => {
+          focused.current = false;
+          setValue(String(current));
+        }}
         inputMode="numeric"
-        aria-label={format === "pdf" ? "Go to page" : "Go to percentage"}
+        pattern="[0-9]*"
+        aria-label="Go to page"
         className="w-9 bg-transparent text-center text-[var(--ink)] outline-none"
       />
-      <span>{format === "pdf" ? `/ ${total || "…"}` : "%"}</span>
+      <span>/ {total || "…"}</span>
     </form>
   );
 }
