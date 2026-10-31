@@ -45,13 +45,8 @@ async function epubMeta(file: File, _id: string, fallbackTitle: string): Promise
 }
 
 async function loadPdf() {
-  const pdfjs = await import("pdfjs-dist");
-  // absolute, so it also resolves inside the packaged desktop app
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    "/pdf.worker.min.mjs",
-    window.location.href,
-  ).toString();
-  return pdfjs;
+  const { loadPdfJs } = await import("./pdfjs");
+  return loadPdfJs();
 }
 
 async function pdfMeta(file: File, _id: string, fallbackTitle: string): Promise<BookMeta> {

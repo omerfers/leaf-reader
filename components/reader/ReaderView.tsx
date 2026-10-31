@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getAnnotations,
   getBook,
@@ -46,6 +46,13 @@ export function ReaderView({ id }: { id: string }) {
     { percent: 0, excerpt: "" },
   );
   const [jump, setJump] = useState<{ cfi?: string; page?: number; percent?: number; nonce: number } | undefined>(undefined);
+  // A fresh object every render makes the readers' jump effects fire on every
+  // state update (they would then clear text selections and fight page turns),
+  // so the PDF jump is memoised on its actual values.
+  const pdfJump = useMemo(
+    () => (jump?.page ? { page: jump.page, nonce: jump.nonce } : undefined),
+    [jump],
+  );
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [ready, setReady] = useState(false);
   const saveTimer = useRef<number | null>(null);
@@ -282,7 +289,7 @@ export function ReaderView({ id }: { id: string }) {
                 file={file}
                 initialCfi={progress?.kind === "epub" ? progress.cfi : undefined}
                 settings={settings}
-                jump={jump ? { cfi: jump.cfi, percent: jump.percent, page: jump.page, nonce: jump.nonce } : undefined}
+                jump={jump}
                 onProgress={handleEpubProgress}
                 annotations={annotations}
                 onSelect={setSelection}
@@ -293,7 +300,7 @@ export function ReaderView({ id }: { id: string }) {
                 file={file}
                 initialPage={progress?.kind === "pdf" ? progress.page : 1}
                 settings={settings}
-                jump={jump?.page ? { page: jump.page, nonce: jump.nonce } : undefined}
+                jump={pdfJump}
                 onProgress={handlePdfProgress}
                 annotations={annotations}
                 onSelect={setSelection}
@@ -392,6 +399,8 @@ function PageJump({
       return;
     }
     onJump({ page: Math.min(Math.max(1, Math.round(parsed)), total || Math.round(parsed)) });
+    // hand focus back to the page so arrow keys turn pages again
+    (document.activeElement as HTMLElement | null)?.blur();
   };
 
   return (

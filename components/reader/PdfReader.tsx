@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Annotation, ReaderSettings } from "@/lib/types";
 import type { SelectionInfo } from "./TranslatePopover";
+import { loadPdfJs } from "@/lib/pdfjs";
 
 export function PdfReader({
   file,
@@ -42,11 +43,20 @@ export function PdfReader({
     let cancelled = false;
     (async () => {
       try {
-        const pdfjs = await import("pdfjs-dist");
-        pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+        const pdfjs = await loadPdfJs();
         pdfjsRef.current = pdfjs;
         const data = new Uint8Array(await file.arrayBuffer());
-        const doc = await pdfjs.getDocument({ data }).promise;
+        let doc;
+        try {
+          doc = await pdfjs.getDocument({ data }).promise;
+        } catch (workerError) {
+          // Some WebViews refuse module workers; pdf.js can decode on the main
+          // thread instead, which is slower but still opens the book.
+          console.warn("Leaf: PDF worker failed, retrying without one", workerError);
+          const { disablePdfWorker } = await import("@/lib/pdfjs");
+          disablePdfWorker(pdfjs);
+          doc = await pdfjs.getDocument({ data }).promise;
+        }
         if (cancelled) return;
         docRef.current = doc;
         setTotal(doc.numPages);
@@ -316,7 +326,7 @@ export function PdfReader({
       {state !== "ready" && (
         <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center bg-[var(--page)]">
           <p className="text-xs tracking-[0.18em] text-[var(--muted)] uppercase">
-            {state === "loading" ? "Setting the page…" : "This PDF could not be opened."}
+            {state === "loading" ? "Setting the page…" : "This PDF could not be opened on this device."}
           </p>
         </div>
       )}

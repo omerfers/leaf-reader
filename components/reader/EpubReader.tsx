@@ -43,9 +43,14 @@ export function EpubReader({
 
   useEffect(() => {
     settingsRef.current = settings;
-  }, [settings]);
+    selectRef.current = onSelect;
+    clearRef.current = onClearSelection;
+  }, [onClearSelection, onSelect, settings]);
 
   const turnRef = useRef<(direction: "next" | "prev") => void>(() => {});
+  const navSeq = useRef(0);
+  const selectRef = useRef(onSelect);
+  const clearRef = useRef(onClearSelection);
   const annotationsRef = useRef<Annotation[]>([]);
 
   const paint = useCallback((rendition: Rendition, current: ReaderSettings) => {
@@ -133,10 +138,13 @@ export function EpubReader({
         onProgress(start.cfi ?? "", percent, excerpt, page, total);
       };
 
-      // Swipes happen inside the book's iframe, so listen there and forward.
-      rendition.hooks.content.register((contents: any) => {
+      // Swipes, keys and selection happen inside the book's iframe. Bind once
+      // per document; epub.js may reuse a view when only the page changes.
+      const bound = new WeakSet<Document>();
+      const bindContents = (contents: any) => {
         const doc: Document | undefined = contents?.document;
-        if (!doc) return;
+        if (!doc || bound.has(doc)) return;
+        bound.add(doc);
         let startX = 0;
         let startY = 0;
         let startedAt = 0;
@@ -164,39 +172,70 @@ export function EpubReader({
           },
           { passive: true },
         );
+
+        // Keys are heard inside the iframe too; the page may have focus there
+        // after a jump or a tap.
+        doc.addEventListener("keydown", (event: KeyboardEvent) => {
+          if (event.key === "ArrowRight" || event.key === "PageDown") {
+            event.preventDefault();
+            turnRef.current("next");
+          }
+          if (event.key === "ArrowLeft" || event.key === "PageUp") {
+            event.preventDefault();
+            turnRef.current("prev");
+          }
+        });
+
+        // Selection is tracked here rather than through the rendition event, so
+        // it keeps working after a jump replaces the contents.
+        let timer: number | undefined;
+        doc.addEventListener("selectionchange", () => {
+          // Hidden views from earlier sections stay alive; their empty
+          // selections must not clear the one the reader can actually see.
+          const active = (
+            renditionRef.current?.getContents?.() as unknown as
+              | Array<{ document?: Document }>
+              | undefined
+          )?.[0]?.document;
+          if (active && active !== doc) return;
+          if (timer) window.clearTimeout(timer);
+          timer = window.setTimeout(() => {
+            const selection = doc.defaultView?.getSelection?.();
+            const text = selection?.toString().replace(/\s+/g, " ").trim();
+            if (!selection || !text || selection.rangeCount === 0) {
+              clearRef.current();
+              return;
+            }
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            const frame = doc.defaultView?.frameElement?.getBoundingClientRect();
+            let cfi: string | undefined;
+            try {
+              cfi = contents.cfiFromRange?.(range);
+            } catch {}
+            selectRef.current({
+              text,
+              cfiRange: cfi,
+              rect: {
+                x: (frame?.left ?? 0) + rect.left,
+                y: (frame?.top ?? 0) + rect.top,
+                width: rect.width,
+                height: rect.height,
+              },
+            });
+          }, 220);
+        });
+      };
+
+      rendition.hooks.content.register(bindContents);
+      rendition.on("rendered", () => {
+        (rendition.getContents?.() as unknown as any[] | undefined)?.forEach(bindContents);
+      });
+      rendition.on("relocated", () => {
+        (rendition.getContents?.() as unknown as any[] | undefined)?.forEach(bindContents);
       });
 
       rendition.on("relocated", report);
-
-      rendition.on("selected", (cfiRange: string, contents: any) => {
-        const selection = contents?.window?.getSelection?.();
-        const text = selection?.toString().replace(/\s+/g, " ").trim();
-        if (!text || selection.rangeCount === 0) {
-          onClearSelection();
-          return;
-        }
-        const domRange = selection.getRangeAt(0);
-        const range = domRange.getBoundingClientRect();
-        const frame = contents.document?.defaultView?.frameElement?.getBoundingClientRect();
-        // epub.js sometimes emits the selection without a CFI; ask the contents
-        // for one so highlights survive page turns.
-        let cfi = cfiRange;
-        if (!cfi) {
-          try {
-            cfi = contents.cfiFromRange?.(domRange);
-          } catch {}
-        }
-        onSelect({
-          text,
-          cfiRange: cfi,
-          rect: {
-            x: (frame?.left ?? 0) + range.left,
-            y: (frame?.top ?? 0) + range.top,
-            width: range.width,
-            height: range.height,
-          },
-        });
-      });
 
       resizeObserver = new ResizeObserver(() => {
         const box = host.getBoundingClientRect();
@@ -305,6 +344,60 @@ export function EpubReader({
     paint(rendition, settings);
   }, [paint, settings]);
 
+  const readLocation = useCallback(() => {
+    const rendition = renditionRef.current;
+    const locations = bookRef.current?.locations as unknown as
+      | {
+          locationFromCfi?: (cfi: string) => number;
+          cfiFromLocation?: (index: number) => string;
+          cfiFromPercentage?: (percent: number) => string;
+          total?: number;
+        }
+      | undefined;
+    const cfi = (rendition?.currentLocation?.() as unknown as { start?: { cfi?: string } } | undefined)
+      ?.start?.cfi;
+    const found = cfi && locations?.locationFromCfi ? locations.locationFromCfi(cfi) : undefined;
+    return {
+      cfi,
+      index: typeof found === "number" && found >= 0 ? found : undefined,
+      locations,
+    };
+  }, []);
+
+
+  const goToPage = useCallback(
+    async (desiredPage: number) => {
+      const rendition = renditionRef.current;
+      const { locations } = readLocation();
+      if (!rendition) return;
+      const desired = Math.max(0, Math.round(desiredPage) - 1);
+      const seq = ++navSeq.current;
+      const cfi = locations?.cfiFromLocation?.(desired);
+      if (cfi) {
+        await rendition.display(cfi);
+        await new Promise((resolve) => window.setTimeout(resolve, 170));
+      }
+      // Chunk boundaries rarely line up with rendered pages, so walk the last
+      // few pages until the reported page number is the requested one. Visit
+      // tracking stops the walk from bouncing between two nearby pages.
+      const seen = new Set<number>();
+      for (let step = 0; step < 16; step += 1) {
+        if (seq !== navSeq.current) return;
+        const current = readLocation().index;
+        if (current === undefined) return;
+        if (current === desired) return;
+        if (seen.has(current)) return;
+        seen.add(current);
+        const moved = await Promise.resolve(
+          current < desired ? rendition.next() : rendition.prev(),
+        ).then(() => true).catch(() => false);
+        if (!moved) return;
+        await new Promise((resolve) => window.setTimeout(resolve, 130));
+      }
+    },
+    [readLocation],
+  );
+
   const turn = useCallback(
     (direction: "next" | "prev") => {
       const rendition = renditionRef.current;
@@ -312,34 +405,43 @@ export function EpubReader({
       onClearSelection();
       setTurning(direction);
       window.setTimeout(() => setTurning(null), 360);
-      void (direction === "next" ? rendition.next() : rendition.prev());
+      const step = direction === "next" ? 1 : -1;
+      const before = readLocation().index;
+      void Promise.resolve(direction === "next" ? rendition.next() : rendition.prev()).then(
+        () => {
+          window.setTimeout(() => {
+            const after = readLocation().index;
+            if (before === undefined) return;
+            if (after !== undefined && after !== before) return;
+            // The pagination manager can stall right after a display() jump.
+            void goToPage(before + 1 + step);
+          }, 320);
+        },
+      );
     },
-    [onClearSelection, turning],
+    [goToPage, onClearSelection, readLocation, turning],
   );
 
   useEffect(() => {
     if (!jump) return;
     const rendition = renditionRef.current;
     if (!rendition) return;
-    let target = jump.cfi;
     const locations = bookRef.current?.locations as unknown as
-      | {
-          cfiFromLocation?: (loc: number) => string;
-          cfiFromPercentage?: (percentage: number) => string;
-        }
+      | { cfiFromPercentage?: (percentage: number) => string }
       | undefined;
-    if (!target && typeof jump.page === "number") {
-      const cfi = locations?.cfiFromLocation?.(Math.max(0, jump.page - 1));
-      target = cfi ?? undefined;
+    if (!jump.cfi && typeof jump.page === "number") {
+      onClearSelection();
+      void goToPage(jump.page);
+      return;
     }
+    let target = jump.cfi;
     if (!target && typeof jump.percent === "number") {
-      const cfi = locations?.cfiFromPercentage?.(Math.min(1, Math.max(0, jump.percent)));
-      target = cfi ?? undefined;
+      target = locations?.cfiFromPercentage?.(Math.min(1, Math.max(0, jump.percent)));
     }
     if (!target) return;
     onClearSelection();
     void rendition.display(target);
-  }, [jump, onClearSelection]);
+  }, [goToPage, jump, onClearSelection]);
 
   useEffect(() => {
     turnRef.current = turn;
