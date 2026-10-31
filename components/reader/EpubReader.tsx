@@ -295,7 +295,18 @@ export function EpubReader({
       rendition.on("rendered", drawAnnotations);
 
       try {
-        await rendition.display(initialCfi || undefined);
+        // epub.js keeps `linear` only when the itemref said linear="yes", while
+        // the spec defaults to linear. Books that omit the attribute (most
+        // commercial EPUBs) therefore lose their cover, title pages and table
+        // of contents: display() starts past them and next()/prev() skip them.
+        await book.ready;
+        const spine = book.spine as unknown as {
+          spineItems?: Array<{ linear: boolean; href: string }>;
+        };
+        const items = spine.spineItems ?? [];
+        for (const item of items) item.linear = true;
+        const firstHref = items[0]?.href;
+        await rendition.display(initialCfi || firstHref || undefined);
         if (!cancelled) setState("ready");
         drawAnnotations();
         // epub.js needs a location index before it can give a percentage.
