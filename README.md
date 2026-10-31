@@ -4,6 +4,20 @@ A quiet, local-first reading app for the books you already own. EPUB and PDF,
 a Kindle-like page, and translation that appears **on the page** instead of
 throwing you into another tab.
 
+## Download
+
+All installers live on the [v1.0 release](https://github.com/omerfers/leaf-reader/releases/tag/v1.0):
+
+| Platform | File |
+| --- | --- |
+| macOS (Apple silicon) | `Leaf-1.0.0-arm64.dmg` |
+| Windows | `Leaf.Setup.1.0.0.exe` |
+| Linux | `Leaf-1.0.0.AppImage` |
+| Android | `Leaf-Android.apk` |
+
+The desktop and Android builds are thin shells around the hosted app, so they
+always run the latest version — reinstall only when you want the newest wrapper.
+
 ## What it does
 
 - **Bookshelf** — drag any `.epub` or `.pdf` onto the page (or use *Add books*).
