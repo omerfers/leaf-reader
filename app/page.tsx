@@ -53,6 +53,12 @@ export default function ShelfPage() {
   }, []);
 
   useEffect(() => {
+    // Ask the browser not to evict the library under storage pressure. Books
+    // exist only on this device, so a silent eviction would lose them.
+    void navigator.storage?.persist?.();
+  }, []);
+
+  useEffect(() => {
     const current = (document.documentElement.dataset.theme as typeof theme) || "light";
     // the pre-hydration script already put the theme on <html>; mirror it here
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -121,7 +127,7 @@ export default function ShelfPage() {
         if (event.dataTransfer.files.length) await addFiles(event.dataTransfer.files);
       }}
     >
-      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-5xl flex-col px-5 pb-10 sm:px-8">
+      <main className="safe-top safe-bottom relative z-10 mx-auto flex min-h-dvh w-full max-w-5xl flex-col px-5 pb-10 sm:px-8">
         <header className="flex flex-wrap items-end justify-between gap-4 pt-10 pb-7 sm:pt-12">
           <div>
             <h1 className="font-serif text-[42px] leading-none tracking-tight sm:text-[52px]">
@@ -139,7 +145,7 @@ export default function ShelfPage() {
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-4 py-2.5 text-xs font-medium text-white shadow-[0_10px_24px_-16px_rgba(0,0,0,0.8)] transition hover:brightness-110"
+              className="inline-flex h-11 items-center gap-2 rounded-full bg-[var(--accent)] px-4 text-xs font-medium text-[var(--on-accent)] shadow-[0_10px_24px_-16px_rgba(0,0,0,0.8)] transition hover:brightness-110"
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M12 5v14M5 12h14" strokeLinecap="round" />
@@ -214,10 +220,10 @@ export default function ShelfPage() {
           </div>
 
           <p className="mt-6 text-center text-[11px] text-muted">
-            Drop an EPUB or PDF anywhere · your books never leave this device
+            Add EPUB or PDF files · your books never leave this device
           </p>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
@@ -266,7 +272,7 @@ function EmptyShelf({ onAdd }: { onAdd: () => void }) {
         </svg>
         <h2 className="mt-4 font-serif text-2xl text-[#f4e9d6]">Nothing here yet</h2>
         <p className="mt-2 max-w-[34ch] text-sm leading-relaxed text-[#f4e9d6]/55">
-          Drop an EPUB or PDF anywhere on this page, or add one from your library.
+          Add an EPUB or PDF from this device. Nothing is uploaded, and you can drop files here on a computer.
         </p>
         <button
           type="button"

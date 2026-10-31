@@ -39,6 +39,8 @@ export function PdfReader({
   const [errorText, setErrorText] = useState("");
   const [turning, setTurning] = useState<"next" | "prev" | null>(null);
   const touchRef = useRef<{ x: number; y: number; at: number } | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const lastPainted = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +85,8 @@ export function PdfReader({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file]);
 
+  const zoom = settings.pdfZoom ?? 1;
+
   const paint = useCallback(async () => {
     const doc = docRef.current;
     const pdfjs = pdfjsRef.current;
@@ -108,8 +112,18 @@ export function PdfReader({
     const padding = 28;
     const availableWidth = Math.max(120, stage.clientWidth - padding * 2);
     const availableHeight = Math.max(160, stage.clientHeight - padding * 2);
-    const scale = Math.min(availableWidth / base.width, availableHeight / base.height);
+    // On phones a whole printed page is unreadable, so the page fills the width
+    // and scrolls vertically; on larger screens the whole page is shown.
+    const fitWidth = stage.clientWidth < 640;
+    const fitScale = fitWidth
+      ? availableWidth / base.width
+      : Math.min(availableWidth / base.width, availableHeight / base.height);
+    const scale = fitScale * zoom;
     const viewport = pdfPage.getViewport({ scale });
+    if (scrollRef.current && lastPainted.current !== page) {
+      scrollRef.current.scrollTop = 0;
+    }
+    lastPainted.current = page;
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.floor(viewport.width * dpr);
@@ -158,12 +172,12 @@ export function PdfReader({
       });
       await fallback.render();
     }
-  }, [page]);
+  }, [page, zoom]);
 
   useEffect(() => {
     if (state !== "ready") return;
     void paint();
-  }, [page, paint, state]);
+  }, [paint, state]);
 
   useEffect(() => {
     if (state !== "ready") return;
@@ -209,6 +223,20 @@ export function PdfReader({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      // A zoomed page is panned with the arrows; Page Up and Page Down still turn.
+      const zoomed = (settings.pdfZoom ?? 1) > 1;
+      const pan: Record<string, [number, number]> = {
+        ArrowUp: [0, -120],
+        ArrowDown: [0, 120],
+        ArrowLeft: [-120, 0],
+        ArrowRight: [120, 0],
+      };
+      if (zoomed && pan[event.key] && scrollRef.current) {
+        event.preventDefault();
+        const [left, top] = pan[event.key];
+        scrollRef.current.scrollBy({ left, top });
+        return;
+      }
       if (event.key === "ArrowRight" || event.key === "PageDown") {
         event.preventDefault();
         go("next");
@@ -220,7 +248,7 @@ export function PdfReader({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go]);
+  }, [go, settings.pdfZoom]);
 
   const handleSelect = () => {
     const selection = window.getSelection();
@@ -275,12 +303,21 @@ export function PdfReader({
         if (!start || !touch) return;
         const dx = touch.clientX - start.x;
         const dy = touch.clientY - start.y;
-        if (Date.now() - start.at < 700 && Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+        const zoomed = (settings.pdfZoom ?? 1) > 1;
+        if (!zoomed && Date.now() - start.at < 700 && Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.3) {
           go(dx < 0 ? "next" : "prev");
         }
       }}
     >
-      <div className="relative" style={{ filter: pdfFilter }}>
+      <div
+        ref={scrollRef}
+        tabIndex={0}
+        role="region"
+        aria-label="PDF page"
+        className="absolute inset-0 overflow-auto overscroll-contain"
+      >
+      <div className="flex min-h-full min-w-full py-3">
+      <div className="relative m-auto" style={{ filter: pdfFilter }}>
         <canvas ref={canvasRef} className="block rounded-[2px] shadow-[0_10px_30px_-22px_rgba(0,0,0,0.7)]" />
         <div
           ref={textRef}
@@ -311,6 +348,8 @@ export function PdfReader({
               />
             )),
           )}
+      </div>
+      </div>
       </div>
 
       <button

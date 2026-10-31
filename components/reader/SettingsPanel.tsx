@@ -20,14 +20,19 @@ export function SettingsPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="pop-in absolute top-3 right-3 z-40 w-[280px] rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[0_26px_60px_-30px_rgba(0,0,0,0.6)]">
+    <div
+      data-panel
+      role="dialog"
+      aria-label="Reading settings"
+      className="pop-in absolute top-3 right-3 left-3 z-40 max-h-[calc(100%-1.5rem)] overflow-y-auto rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[0_26px_60px_-30px_rgba(0,0,0,0.6)] sm:left-auto sm:w-[280px]"
+    >
       <div className="flex items-center justify-between">
         <p className="text-[10px] tracking-[0.18em] text-[var(--muted)] uppercase">Reading</p>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close settings"
-          className="rounded-full p-1 text-[var(--muted)] hover:bg-black/5 hover:text-[var(--ink)]"
+          className="grid h-10 w-10 place-items-center rounded-full text-[var(--muted)] hover:bg-black/5 hover:text-[var(--ink)]"
         >
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
@@ -106,10 +111,25 @@ export function SettingsPanel({
           </div>
         </>
       ) : (
-        <p className="mt-5 text-[11px] leading-relaxed text-[var(--muted)]">
-          PDF pages keep their printed layout; the colour option only dims the page for reading at
-          night.
-        </p>
+        <>
+          <label className="mt-5 block text-[11px] font-medium">
+            Page size
+            <span className="float-right text-[var(--muted)]">{Math.round((settings.pdfZoom ?? 1) * 100)}%</span>
+            <input
+              type="range"
+              min={1}
+              max={2.5}
+              step={0.25}
+              value={settings.pdfZoom ?? 1}
+              onChange={(event) => onChange({ pdfZoom: Number(event.target.value) })}
+              className="mt-2 w-full accent-[var(--accent)]"
+            />
+          </label>
+          <p className="mt-3 text-[11px] leading-relaxed text-[var(--muted)]">
+            Larger pages scroll in every direction; swipe to turn pages at 100%. The colour option
+            only dims the page for reading at night.
+          </p>
+        </>
       )}
 
       <div className="mt-5 border-t border-[var(--line)] pt-3">

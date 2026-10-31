@@ -22,7 +22,7 @@ export function SelectionToolbar({
   onTranslate: () => void;
   onDismiss: () => void;
 }) {
-  const width = 300;
+  const width = 336;
   const left = Math.min(
     Math.max(12, selection.rect.x + selection.rect.width / 2 - width / 2),
     Math.max(12, window.innerWidth - width - 12),
@@ -42,7 +42,7 @@ export function SelectionToolbar({
           type="button"
           onClick={() => onHighlight(color.value)}
           aria-label={`Highlight ${color.name.toLowerCase()}`}
-          className="h-6 w-6 rounded-full border border-black/10 transition hover:scale-110"
+          className="h-8 w-8 rounded-full border border-black/10 transition hover:scale-110 sm:h-6 sm:w-6"
           style={{ backgroundColor: color.value }}
         />
       ))}
@@ -53,7 +53,7 @@ export function SelectionToolbar({
         type="button"
         onClick={() => onUnderline(COLORS[0].value)}
         aria-label="Underline"
-        className="grid h-6 w-6 place-items-center rounded-full text-[var(--ink)] transition hover:bg-black/5"
+        className="grid h-8 w-8 place-items-center rounded-full text-[var(--ink)] transition hover:bg-black/5 sm:h-6 sm:w-6"
       >
         <span className="text-[13px] font-semibold underline decoration-2 underline-offset-2">U</span>
       </button>
@@ -61,7 +61,7 @@ export function SelectionToolbar({
       <button
         type="button"
         onClick={onTranslate}
-        className="rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-[0.12em] text-[var(--accent)] uppercase transition hover:bg-[var(--accent)]/10"
+        className="h-8 rounded-full px-2.5 text-[10px] font-semibold tracking-[0.12em] text-[var(--accent)] uppercase transition hover:bg-[var(--accent)]/10 sm:h-auto sm:py-1"
       >
         Translate
       </button>
@@ -70,7 +70,7 @@ export function SelectionToolbar({
         type="button"
         onClick={onDismiss}
         aria-label="Close"
-        className="grid h-6 w-6 place-items-center rounded-full text-[var(--muted)] transition hover:bg-black/5"
+        className="grid h-8 w-8 place-items-center rounded-full text-[var(--muted)] transition hover:bg-black/5 sm:h-6 sm:w-6"
       >
         <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.2">
           <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />

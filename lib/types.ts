@@ -18,6 +18,8 @@ export interface ReaderSettings {
   lineHeight: number;
   margin: "narrow" | "normal" | "wide";
   targetLang: string;
+  /** PDF page size multiplier on top of "fit"; 1 means fit */
+  pdfZoom?: number;
 }
 
 export interface Bookmark {
@@ -51,6 +53,7 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   lineHeight: 1.7,
   margin: "normal",
   targetLang: "tr",
+  pdfZoom: 1,
 };
 
 export const TRANSLATE_LANGS = [

@@ -28,6 +28,7 @@ import { EpubReader } from "./EpubReader";
 import { PdfReader } from "./PdfReader";
 import { SettingsPanel } from "./SettingsPanel";
 import { BookmarksPanel } from "./BookmarksPanel";
+import { GoToPage } from "./GoToPage";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { TranslatePopover, type SelectionInfo } from "./TranslatePopover";
 
@@ -123,6 +124,36 @@ export function ReaderView({ id }: { id: string }) {
     window.getSelection()?.removeAllRanges();
   }, []);
 
+  const closePanels = useCallback(() => {
+    setSettingsOpen(false);
+    setBookmarksOpen(false);
+    setTranslateFor(null);
+  }, []);
+
+  // Panels close on Escape and on a tap outside them, as a phone user expects.
+  // Taps on the buttons that open them are ignored so they still toggle.
+  useEffect(() => {
+    if (!settingsOpen && !bookmarksOpen && !translateFor) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest("[data-panel], [data-panel-trigger]")) return;
+      if (translateFor) clearSelection();
+      closePanels();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (translateFor) clearSelection();
+        closePanels();
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [bookmarksOpen, clearSelection, closePanels, settingsOpen, translateFor]);
+
   const handleEpubProgress = useCallback(
     (cfi: string, percent: number, excerpt: string, page?: number, total?: number) => {
       setLocation({ cfi, percent, excerpt, page, total });
@@ -207,11 +238,11 @@ export function ReaderView({ id }: { id: string }) {
 
   return (
     <div className="flex h-dvh flex-col bg-[var(--bg)] text-[var(--ink)]">
-      <header className="z-30 flex h-14 shrink-0 items-center gap-2 border-b border-[var(--line)] bg-[var(--surface)]/85 px-3 backdrop-blur-md sm:px-5">
+      <header className="safe-header z-30 flex shrink-0 items-center gap-2 border-b border-[var(--line)] bg-[var(--surface)]/85 px-3 backdrop-blur-md sm:px-5">
         <Link
           href="/"
           aria-label="Back to the shelf"
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[var(--muted)] transition hover:bg-black/5 hover:text-[var(--ink)]"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-[var(--muted)] transition hover:bg-black/5 hover:text-[var(--ink)] sm:h-9 sm:w-9"
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
             <path d="M15 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
@@ -219,18 +250,17 @@ export function ReaderView({ id }: { id: string }) {
         </Link>
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] font-medium leading-tight">{book?.title ?? "Opening…"}</p>
+          <h1 className="truncate text-[13px] font-medium leading-tight">{book?.title ?? "Opening…"}</h1>
           <p className="truncate text-[11px] leading-tight text-[var(--muted)]">
             {book?.author ?? (book ? book.format.toUpperCase() : "")}
           </p>
         </div>
 
         {book && progress && (
-          <PageJump
+          <GoToPage
             page={location.page}
-            percent={location.percent}
             total={book.format === "pdf" ? (progress.kind === "pdf" ? progress.total : 0) : (location.total ?? 0)}
-            onJump={(target) => setJump({ ...target, nonce: Date.now() })}
+            onJump={(page) => setJump({ page, nonce: Date.now() })}
           />
         )}
 
@@ -252,6 +282,7 @@ export function ReaderView({ id }: { id: string }) {
 
         <div className="flex items-center gap-1">
           <IconButton
+            panelTrigger
             label="Bookmarks"
             onClick={() => {
               setBookmarksOpen((open) => !open);
@@ -264,6 +295,7 @@ export function ReaderView({ id }: { id: string }) {
             </svg>
           </IconButton>
           <IconButton
+            panelTrigger
             label="Reading settings"
             onClick={() => {
               setSettingsOpen((open) => !open);
@@ -291,6 +323,7 @@ export function ReaderView({ id }: { id: string }) {
                 settings={settings}
                 jump={jump}
                 onProgress={handleEpubProgress}
+                onBookTap={closePanels}
                 annotations={annotations}
                 onSelect={setSelection}
                 onClearSelection={clearSelection}
@@ -334,9 +367,16 @@ export function ReaderView({ id }: { id: string }) {
         )}
       </main>
 
-      <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-[var(--line)] bg-[var(--surface)]/70 px-4 text-[10px] tracking-[0.16em] text-[var(--muted)] uppercase">
+      <footer className="safe-footer flex shrink-0 items-center gap-3 border-t border-[var(--line)] bg-[var(--surface)]/70 px-4 text-[10px] tracking-[0.16em] text-[var(--muted)] uppercase">
         <span>{percentLabel(progress) ?? "0%"}</span>
-        <span className="relative h-[2px] flex-1 overflow-hidden rounded-full bg-[var(--line)]">
+        <span
+          role="progressbar"
+          aria-label="Reading progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round((progress ? progressFraction(progress) : 0) * 100)}
+          className="relative h-[2px] flex-1 overflow-hidden rounded-full bg-[var(--line)]"
+        >
           <span
             className="absolute inset-y-0 left-0 rounded-full bg-[var(--accent)] transition-[width] duration-300"
             style={{ width: `${(progress ? progressFraction(progress) : 0) * 100}%` }}
@@ -344,6 +384,9 @@ export function ReaderView({ id }: { id: string }) {
         </span>
         <span className="hidden sm:inline">{book?.format.toUpperCase()}</span>
       </footer>
+      <p className="sr-only" role="status" aria-live="polite">
+        {location.page ? `Page ${location.page}${location.total || book?.pages ? ` of ${location.total ?? book?.pages}` : ""}` : ""}
+      </p>
 
       {selection && !translateFor && (
         <SelectionToolbar
@@ -373,76 +416,17 @@ export function ReaderView({ id }: { id: string }) {
   );
 }
 
-function PageJump({
-  page,
-  percent,
-  total,
-  onJump,
-}: {
-  page?: number;
-  percent?: number;
-  total: number;
-  onJump: (target: { page?: number; percent?: number }) => void;
-}) {
-  const current = page ?? Math.round((percent ?? 0) * 100);
-  const [value, setValue] = useState(String(current));
-  const focused = useRef(false);
-
-  useEffect(() => {
-    if (!focused.current) setValue(String(current));
-  }, [current]);
-
-  const apply = () => {
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed)) {
-      setValue(String(current));
-      return;
-    }
-    onJump({ page: Math.min(Math.max(1, Math.round(parsed)), total || Math.round(parsed)) });
-    // hand focus back to the page so arrow keys turn pages again
-    (document.activeElement as HTMLElement | null)?.blur();
-  };
-
-  return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        apply();
-      }}
-      className="flex shrink-0 items-center gap-1 rounded-full border border-[var(--line)] px-2 py-1 text-[11px] text-[var(--muted)]"
-      title="Go to page"
-    >
-      <span className="hidden tracking-[0.12em] uppercase sm:inline">Page</span>
-      <input
-        value={value}
-        onChange={(event) => setValue(event.target.value.replace(/[^0-9]/g, ""))}
-        onFocus={(event) => {
-          focused.current = true;
-          event.currentTarget.select();
-        }}
-        onBlur={() => {
-          focused.current = false;
-          setValue(String(current));
-        }}
-        inputMode="numeric"
-        pattern="[0-9]*"
-        aria-label="Go to page"
-        className="w-9 bg-transparent text-center text-[var(--ink)] outline-none"
-      />
-      <span>/ {total || "…"}</span>
-    </form>
-  );
-}
-
 function IconButton({
   label,
   onClick,
   active,
+  panelTrigger,
   children,
 }: {
   label: string;
   onClick: () => void;
   active?: boolean;
+  panelTrigger?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -451,9 +435,10 @@ function IconButton({
       onClick={onClick}
       aria-label={label}
       aria-pressed={active}
-      className={`grid h-9 w-9 place-items-center rounded-full transition ${
+      data-panel-trigger={panelTrigger ? "" : undefined}
+      className={`grid h-11 w-11 place-items-center rounded-full transition sm:h-9 sm:w-9 ${
         active
-          ? "bg-[var(--accent)] text-white"
+          ? "bg-[var(--accent)] text-[var(--on-accent)]"
           : "text-[var(--muted)] hover:bg-black/5 hover:text-[var(--ink)]"
       }`}
     >

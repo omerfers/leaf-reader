@@ -16,14 +16,19 @@ export function BookmarksPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="pop-in absolute top-3 right-3 z-40 flex max-h-[70vh] w-[300px] flex-col rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-[0_26px_60px_-30px_rgba(0,0,0,0.6)]">
+    <div
+      data-panel
+      role="dialog"
+      aria-label="Bookmarks"
+      className="pop-in absolute top-3 right-3 left-3 z-40 flex max-h-[70vh] flex-col rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-[0_26px_60px_-30px_rgba(0,0,0,0.6)] sm:left-auto sm:w-[300px]"
+    >
       <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
         <p className="text-[10px] tracking-[0.18em] text-[var(--muted)] uppercase">Bookmarks</p>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close bookmarks"
-          className="rounded-full p-1 text-[var(--muted)] hover:bg-black/5 hover:text-[var(--ink)]"
+          className="grid h-10 w-10 place-items-center rounded-full text-[var(--muted)] hover:bg-black/5 hover:text-[var(--ink)]"
         >
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
@@ -73,7 +78,7 @@ export function BookmarksPanel({
                 type="button"
                 onClick={() => onRemove(bookmark)}
                 aria-label="Delete bookmark"
-                className="mt-0.5 shrink-0 rounded-full p-1 text-[var(--muted)] opacity-0 transition hover:bg-red-500/10 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[var(--muted)] opacity-100 transition hover:bg-red-500/10 hover:text-red-600 sm:h-8 sm:w-8 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
               >
                 <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" strokeLinecap="round" strokeLinejoin="round" />

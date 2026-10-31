@@ -9,6 +9,7 @@
   --line: #e2d8c6;
   --accent: #8a5a34;
   --accent-soft: #c8a87f;
+  --on-accent: #fffdf8;
   --page: #fffdf8;
   --page-ink: #2b2620;
   --shadow: 0 20px 40px -30px rgba(46, 32, 15, 0.6);
@@ -44,6 +45,7 @@ html[data-theme="dark"] {
   --line: #2f2a21;
   --accent: #d0a872;
   --accent-soft: #8a6a42;
+  --on-accent: #1b1307;
   --page: #1c1915;
   --page-ink: #e6dcc8;
   --shadow: 0 24px 50px -36px rgba(0, 0, 0, 0.9);
@@ -228,11 +230,44 @@ html[data-theme="dark"] .grain::before {
   background: transparent;
 }
 
+/* keyboard users always get a visible focus ring */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* the iPhone notch and home indicator sit outside the app's own chrome */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* bars keep their size and grow by the inset, so the controls keep their room */
+.safe-header {
+  height: calc(3.5rem + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-footer {
+  height: calc(1.75rem + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .turn-sheet,
   .pop-in,
   .fade-in {
     animation-duration: 0.01ms !important;
+  }
+
+  .shelf-book .book-cover,
+  .shelf-book:hover .book-cover,
+  .shelf-book:focus-within .book-cover {
+    transition: none;
+    transform: none;
   }
 }
 

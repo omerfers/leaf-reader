@@ -24,6 +24,7 @@ export function EpubReader({
   onProgress,
   onSelect,
   onClearSelection,
+  onBookTap,
 }: {
   file: Blob;
   initialCfi?: string;
@@ -33,6 +34,7 @@ export function EpubReader({
   onProgress: (cfi: string, percent: number, excerpt: string, page?: number, total?: number) => void;
   onSelect: (selection: SelectionInfo) => void;
   onClearSelection: () => void;
+  onBookTap?: () => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<Book | null>(null);
@@ -45,12 +47,15 @@ export function EpubReader({
     settingsRef.current = settings;
     selectRef.current = onSelect;
     clearRef.current = onClearSelection;
-  }, [onClearSelection, onSelect, settings]);
+    tapRef.current = onBookTap;
+  }, [onBookTap, onClearSelection, onSelect, settings]);
 
   const turnRef = useRef<(direction: "next" | "prev") => void>(() => {});
   const navSeq = useRef(0);
   const selectRef = useRef(onSelect);
   const clearRef = useRef(onClearSelection);
+  const tapRef = useRef(onBookTap);
+  const languageRef = useRef<string | undefined>(undefined);
   const annotationsRef = useRef<Annotation[]>([]);
 
   const paint = useCallback((rendition: Rendition, current: ReaderSettings) => {
@@ -66,8 +71,11 @@ export function EpubReader({
         padding: `0 ${MARGINS[current.margin]}px`,
         "box-sizing": "border-box",
       },
+      // justified text on a narrow screen needs hyphens to avoid wide gaps
       "p, li, blockquote, div": {
         "line-height": String(current.lineHeight),
+        hyphens: "auto",
+        "-webkit-hyphens": "auto",
       },
       a: { color: palette.accent },
       "::selection": { background: "rgba(138, 90, 52, 0.24)" },
@@ -145,6 +153,10 @@ export function EpubReader({
         const doc: Document | undefined = contents?.document;
         if (!doc || bound.has(doc)) return;
         bound.add(doc);
+        doc.addEventListener("pointerdown", () => tapRef.current?.());
+        if (languageRef.current && !doc.documentElement.lang) {
+          doc.documentElement.lang = languageRef.current;
+        }
         let startX = 0;
         let startY = 0;
         let startedAt = 0;
@@ -229,6 +241,9 @@ export function EpubReader({
 
       rendition.hooks.content.register(bindContents);
       rendition.on("rendered", () => {
+        host.querySelectorAll("iframe").forEach((frame) => {
+          if (!frame.title) frame.title = "Book text";
+        });
         (rendition.getContents?.() as unknown as any[] | undefined)?.forEach(bindContents);
       });
       rendition.on("relocated", () => {
@@ -300,6 +315,9 @@ export function EpubReader({
         // commercial EPUBs) therefore lose their cover, title pages and table
         // of contents: display() starts past them and next()/prev() skip them.
         await book.ready;
+        const language = (book.packaging as unknown as { metadata?: { language?: string } })
+          ?.metadata?.language;
+        if (language) languageRef.current = language.toLowerCase().split("-")[0];
         const spine = book.spine as unknown as {
           spineItems?: Array<{ linear: boolean; href: string }>;
         };

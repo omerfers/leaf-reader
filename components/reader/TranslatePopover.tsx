@@ -58,6 +58,7 @@ export function TranslatePopover({
   return (
     <div
       ref={ref}
+      data-panel
       className="pop-in fixed z-50 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.7)]"
       style={{ left, top, width }}
       role="dialog"
@@ -71,7 +72,7 @@ export function TranslatePopover({
           type="button"
           onClick={onClose}
           aria-label="Close translation"
-          className="-mt-1 -mr-1 shrink-0 rounded-full p-1 text-muted hover:bg-black/5 hover:text-[var(--ink)]"
+          className="-mt-2 -mr-2 grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted hover:bg-black/5 hover:text-[var(--ink)]"
         >
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
@@ -101,11 +102,15 @@ export function TranslatePopover({
             <button
               type="button"
               onClick={async () => {
-                await navigator.clipboard.writeText(state.value.text);
-                setCopied(true);
-                window.setTimeout(() => setCopied(false), 1200);
+                try {
+                  await navigator.clipboard.writeText(state.value.text);
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 1200);
+                } catch {
+                  setCopied(false);
+                }
               }}
-              className="rounded px-1 py-0.5 normal-case tracking-normal hover:text-[var(--ink)]"
+              className="grid h-9 min-w-9 place-items-center rounded px-2 normal-case tracking-normal hover:text-[var(--ink)]"
             >
               {copied ? "Copied" : "Copy"}
             </button>
