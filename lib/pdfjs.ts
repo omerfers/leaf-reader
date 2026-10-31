@@ -6,9 +6,10 @@
 
 export type PdfJsModule = typeof import("pdfjs-dist");
 
-let cached: Promise<PdfJsModule> | null = null;
+let modern: Promise<PdfJsModule> | null = null;
+let legacy: Promise<PdfJsModule> | null = null;
 
-function browserSupportsModernBuild() {
+export function browserSupportsModernPdfJs() {
   if (typeof window === "undefined") return false;
   const promiseWithResolvers = (Promise as unknown as { withResolvers?: unknown })
     .withResolvers;
@@ -29,31 +30,33 @@ function workerUrl(path: string) {
   }
 }
 
-async function load(): Promise<PdfJsModule> {
-  if (browserSupportsModernBuild()) {
+async function loadModern(): Promise<PdfJsModule> {
+  const pdfjs = await import("pdfjs-dist");
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl("/pdf.worker.min.mjs");
+  return pdfjs;
+}
+
+async function loadLegacy(): Promise<PdfJsModule> {
+  const pdfjs = (await import(
+    "pdfjs-dist/legacy/build/pdf.mjs"
+  )) as unknown as PdfJsModule;
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl("/pdf.worker.legacy.min.mjs");
+  return pdfjs;
+}
+
+export async function loadPdfJs(options?: { forceLegacy?: boolean }): Promise<PdfJsModule> {
+  if (options?.forceLegacy) {
+    legacy ??= loadLegacy();
+    return legacy;
+  }
+  if (browserSupportsModernPdfJs()) {
     try {
-      const pdfjs = await import("pdfjs-dist");
-      pdfjs.GlobalWorkerOptions.workerSrc = workerUrl("/pdf.worker.min.mjs");
-      return pdfjs;
+      modern ??= loadModern();
+      return await modern;
     } catch (error) {
       console.warn("Leaf: modern pdf.js failed, falling back to the legacy build", error);
     }
   }
-  const legacy = (await import(
-    "pdfjs-dist/legacy/build/pdf.mjs"
-  )) as unknown as PdfJsModule;
-  legacy.GlobalWorkerOptions.workerSrc = workerUrl("/pdf.worker.legacy.min.mjs");
+  legacy ??= loadLegacy();
   return legacy;
-}
-
-export function loadPdfJs(): Promise<PdfJsModule> {
-  if (!cached) cached = load();
-  return cached;
-}
-
-/** A second chance on very old engines: load the document on the main thread. */
-export function disablePdfWorker(pdfjs: PdfJsModule) {
-  pdfjs.GlobalWorkerOptions.workerSrc = "";
-  (pdfjs.GlobalWorkerOptions as unknown as { workerPort?: MessagePort | null }).workerPort =
-    null;
 }

@@ -43,19 +43,22 @@ export function PdfReader({
     let cancelled = false;
     (async () => {
       try {
-        const pdfjs = await loadPdfJs();
+        let pdfjs = await loadPdfJs();
         pdfjsRef.current = pdfjs;
-        const data = new Uint8Array(await file.arrayBuffer());
         let doc;
         try {
-          doc = await pdfjs.getDocument({ data }).promise;
-        } catch (workerError) {
-          // Some WebViews refuse module workers; pdf.js can decode on the main
-          // thread instead, which is slower but still opens the book.
-          console.warn("Leaf: PDF worker failed, retrying without one", workerError);
-          const { disablePdfWorker } = await import("@/lib/pdfjs");
-          disablePdfWorker(pdfjs);
-          doc = await pdfjs.getDocument({ data }).promise;
+          doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) })
+            .promise;
+        } catch (firstError) {
+          // Old Android WebViews choke on the modern build's worker; retry with
+          // the legacy build before giving up on the file.
+          console.warn("Leaf: PDF failed to open, retrying with the legacy pdf.js", firstError);
+          const legacy = await loadPdfJs({ forceLegacy: true });
+          if (legacy === pdfjs) throw firstError;
+          pdfjs = legacy;
+          pdfjsRef.current = pdfjs;
+          doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) })
+            .promise;
         }
         if (cancelled) return;
         docRef.current = doc;
