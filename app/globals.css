@@ -321,9 +321,10 @@ html[data-theme="dark"] .grain::before {
 .shelf-book {
   display: flex;
   min-width: 0;
+  flex: 1 1 0;
   flex-direction: column;
   align-items: stretch;
-  width: clamp(74px, 15vw, 132px);
+  max-width: 132px;
 }
 
 .shelf-book .book-cover {
