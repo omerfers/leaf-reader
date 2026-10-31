@@ -23,7 +23,7 @@ export function GoToPage({
   const titleId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
-  const [draft, setDraft] = useState(String(current));
+  const [draft, setDraft] = useState(String(page ?? 1));
   const [error, setError] = useState<string | null>(null);
 
   const close = useCallback(() => {
@@ -57,7 +57,7 @@ export function GoToPage({
   }, [close, open]);
 
   const openDialog = () => {
-    setDraft(String(current));
+    setDraft(String(page ?? 1));
     setError(null);
     setOpen(true);
   };
@@ -87,7 +87,8 @@ export function GoToPage({
         className="flex h-11 shrink-0 items-center gap-1.5 rounded-full border border-[var(--line)] px-3 text-[12px] text-[var(--muted)] transition hover:bg-black/5 hover:text-[var(--ink)] disabled:opacity-60 sm:h-9"
       >
         <span className="sr-only">Go to page,</span>
-        <span className="text-[var(--ink)] tabular-nums">{current}</span>
+        {/* picture-only pages (covers, plates) have no page number */}
+        <span className="text-[var(--ink)] tabular-nums">{page ?? "–"}</span>
         <span className="tabular-nums">/ {total || "…"}</span>
       </button>
 

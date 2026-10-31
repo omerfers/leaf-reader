@@ -14,12 +14,14 @@ export function SelectionToolbar({
   onHighlight,
   onUnderline,
   onTranslate,
+  onDefine,
   onDismiss,
 }: {
   selection: SelectionInfo;
   onHighlight: (color: string) => void;
   onUnderline: (color: string) => void;
   onTranslate: () => void;
+  onDefine?: () => void;
   onDismiss: () => void;
 }) {
   const width = 336;
@@ -31,7 +33,7 @@ export function SelectionToolbar({
 
   return (
     <div
-      className="pop-in fixed z-50 flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.7)]"
+      className="pop-in fixed z-50 flex max-w-[calc(100vw-24px)] flex-wrap items-center justify-center gap-1 rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.7)] sm:flex-nowrap sm:rounded-full"
       style={{ left, top }}
       role="toolbar"
       aria-label="Selection actions"
@@ -57,6 +59,16 @@ export function SelectionToolbar({
       >
         <span className="text-[13px] font-semibold underline decoration-2 underline-offset-2">U</span>
       </button>
+
+      {onDefine && (
+        <button
+          type="button"
+          onClick={onDefine}
+          className="h-8 rounded-full px-2.5 text-[10px] font-semibold tracking-[0.12em] text-[var(--accent)] uppercase transition hover:bg-[var(--accent)]/10 sm:h-auto sm:py-1"
+        >
+          Define
+        </button>
+      )}
 
       <button
         type="button"

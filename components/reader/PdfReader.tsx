@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Annotation, ReaderSettings } from "@/lib/types";
 import type { SelectionInfo } from "./TranslatePopover";
 import { loadPdfJs } from "@/lib/pdfjs";
+import { excerptAround, type ReaderApi, type SearchHit, type TocEntry } from "@/lib/reader-api";
 
 export function PdfReader({
   file,
@@ -16,6 +17,7 @@ export function PdfReader({
   onProgress,
   onSelect,
   onClearSelection,
+  onReady,
 }: {
   file: Blob;
   initialPage?: number;
@@ -25,6 +27,7 @@ export function PdfReader({
   onProgress: (page: number, total: number, excerpt: string) => void;
   onSelect: (selection: SelectionInfo) => void;
   onClearSelection: () => void;
+  onReady?: (api: ReaderApi) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
@@ -67,6 +70,7 @@ export function PdfReader({
         docRef.current = doc;
         setTotal(doc.numPages);
         setState("ready");
+        onReady?.(readerApi(doc));
         onProgress(page, doc.numPages, "");
       } catch (error) {
         console.error("[leaf] pdf open failed", error);
@@ -389,4 +393,54 @@ export function PdfReader({
       </div>
     </div>
   );
+}
+
+/** Contents and search for a PDF, read from its outline and text layer. */
+function readerApi(doc: any): ReaderApi {
+  return {
+    toc: async (): Promise<TocEntry[]> => {
+      const outline = await doc.getOutline();
+      const out: TocEntry[] = [];
+      const walk = async (items: any[] | null | undefined, depth: number) => {
+        for (const item of items ?? []) {
+          let page: number | undefined;
+          try {
+            let dest = item.dest;
+            if (typeof dest === "string") dest = await doc.getDestination(dest);
+            if (Array.isArray(dest) && dest[0]) page = (await doc.getPageIndex(dest[0])) + 1;
+          } catch {
+            // an unresolvable destination is simply left out
+          }
+          const label = String(item.title ?? "").replace(/\s+/g, " ").trim();
+          if (label && page) out.push({ label, depth, target: { page } });
+          await walk(item.items, depth + 1);
+        }
+      };
+      await walk(outline, 0);
+      return out;
+    },
+    search: async (query, { signal, onProgress, limit }) => {
+      const needle = query.trim();
+      const hits: SearchHit[] = [];
+      if (!needle) return hits;
+      const lower = needle.toLowerCase();
+      for (let number = 1; number <= doc.numPages; number += 1) {
+        if (signal.aborted) break;
+        const page = await doc.getPage(number);
+        const content = await page.getTextContent();
+        const text: string = content.items.map((item: { str?: string }) => item.str ?? "").join(" ");
+        const haystack = text.toLowerCase();
+        let at = haystack.indexOf(lower);
+        while (at !== -1 && hits.length < limit) {
+          hits.push({ excerpt: excerptAround(text, at, needle.length), target: { page: number } });
+          at = haystack.indexOf(lower, at + lower.length);
+        }
+        page.cleanup?.();
+        onProgress(number, doc.numPages);
+        if (hits.length >= limit) break;
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+      return hits;
+    },
+  };
 }

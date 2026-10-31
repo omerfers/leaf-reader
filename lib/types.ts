@@ -20,6 +20,8 @@ export interface ReaderSettings {
   targetLang: string;
   /** PDF page size multiplier on top of "fit"; 1 means fit */
   pdfZoom?: number;
+  /** EPUB: tapping the left or right quarter of the page turns it */
+  tapToTurn?: boolean;
 }
 
 export interface Bookmark {
@@ -54,6 +56,7 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   margin: "normal",
   targetLang: "tr",
   pdfZoom: 1,
+  tapToTurn: true,
 };
 
 export const TRANSLATE_LANGS = [

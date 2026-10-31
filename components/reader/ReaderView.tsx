@@ -27,10 +27,12 @@ import { percentLabel } from "@/lib/format";
 import { EpubReader } from "./EpubReader";
 import { PdfReader } from "./PdfReader";
 import { SettingsPanel } from "./SettingsPanel";
-import { BookmarksPanel } from "./BookmarksPanel";
+import { ContentsPanel, type ContentsTab } from "./ContentsPanel";
+import type { ReaderApi, ReaderTarget } from "@/lib/reader-api";
 import { GoToPage } from "./GoToPage";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { TranslatePopover, type SelectionInfo } from "./TranslatePopover";
+import { DefinePopover, isSingleWord } from "./DefinePopover";
 
 export function ReaderView({ id }: { id: string }) {
   const [book, setBook] = useState<BookMeta | null>(null);
@@ -39,10 +41,13 @@ export function ReaderView({ id }: { id: string }) {
   const [settings, setSettings] = useState<ReaderSettings>(DEFAULT_SETTINGS);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [bookmarksOpen, setBookmarksOpen] = useState(false);
+  const [contentsOpen, setContentsOpen] = useState(false);
+  const [contentsTab, setContentsTab] = useState<ContentsTab>("contents");
+  const [readerApi, setReaderApi] = useState<ReaderApi | null>(null);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [translateFor, setTranslateFor] = useState<SelectionInfo | null>(null);
+  const [defineFor, setDefineFor] = useState<SelectionInfo | null>(null);
   const [location, setLocation] = useState<{ cfi?: string; page?: number; total?: number; percent: number; excerpt: string }>(
     { percent: 0, excerpt: "" },
   );
@@ -126,14 +131,15 @@ export function ReaderView({ id }: { id: string }) {
 
   const closePanels = useCallback(() => {
     setSettingsOpen(false);
-    setBookmarksOpen(false);
+    setContentsOpen(false);
     setTranslateFor(null);
+    setDefineFor(null);
   }, []);
 
   // Panels close on Escape and on a tap outside them, as a phone user expects.
   // Taps on the buttons that open them are ignored so they still toggle.
   useEffect(() => {
-    if (!settingsOpen && !bookmarksOpen && !translateFor) return;
+    if (!settingsOpen && !contentsOpen && !translateFor && !defineFor) return;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Element | null;
       if (target?.closest("[data-panel], [data-panel-trigger]")) return;
@@ -152,7 +158,7 @@ export function ReaderView({ id }: { id: string }) {
       document.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKey);
     };
-  }, [bookmarksOpen, clearSelection, closePanels, settingsOpen, translateFor]);
+  }, [contentsOpen, clearSelection, closePanels, defineFor, settingsOpen, translateFor]);
 
   const handleEpubProgress = useCallback(
     (cfi: string, percent: number, excerpt: string, page?: number, total?: number) => {
@@ -218,11 +224,6 @@ export function ReaderView({ id }: { id: string }) {
     [annotations, id, selection],
   );
 
-  const jumpToBookmark = useCallback((bookmark: Bookmark) => {
-    setBookmarksOpen(false);
-    setJump({ cfi: bookmark.cfi, page: bookmark.page, nonce: Date.now() });
-  }, []);
-
   if (error) {
     return (
       <div className="grid min-h-dvh place-items-center bg-[var(--bg)] px-6 text-center">
@@ -283,15 +284,16 @@ export function ReaderView({ id }: { id: string }) {
         <div className="flex items-center gap-1">
           <IconButton
             panelTrigger
-            label="Bookmarks"
+            label="Contents, search and bookmarks"
             onClick={() => {
-              setBookmarksOpen((open) => !open);
+              setContentsOpen((open) => !open);
               setSettingsOpen(false);
             }}
-            active={bookmarksOpen}
+            active={contentsOpen}
           >
             <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.7">
-              <path d="M6 4h12v17l-6-4-6 4z" strokeLinejoin="round" />
+              <path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5C4.7 20 4 19.3 4 18.5z" strokeLinejoin="round" />
+              <path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H13v16h5.5c.8 0 1.5-.7 1.5-1.5z" strokeLinejoin="round" />
             </svg>
           </IconButton>
           <IconButton
@@ -299,7 +301,7 @@ export function ReaderView({ id }: { id: string }) {
             label="Reading settings"
             onClick={() => {
               setSettingsOpen((open) => !open);
-              setBookmarksOpen(false);
+              setContentsOpen(false);
             }}
             active={settingsOpen}
           >
@@ -327,6 +329,7 @@ export function ReaderView({ id }: { id: string }) {
                 annotations={annotations}
                 onSelect={setSelection}
                 onClearSelection={clearSelection}
+                onReady={setReaderApi}
               />
             ) : (
               <PdfReader
@@ -338,6 +341,7 @@ export function ReaderView({ id }: { id: string }) {
                 annotations={annotations}
                 onSelect={setSelection}
                 onClearSelection={clearSelection}
+                onReady={setReaderApi}
               />
             )
           ) : (
@@ -347,13 +351,19 @@ export function ReaderView({ id }: { id: string }) {
           )}
         </div>
 
-        {bookmarksOpen && (
-          <BookmarksPanel
+        {contentsOpen && (
+          <ContentsPanel
+            tab={contentsTab}
+            onTab={setContentsTab}
+            api={readerApi}
             bookmarks={bookmarks}
-            onAdd={addBookmark}
-            onJump={jumpToBookmark}
-            onRemove={removeBookmark}
-            onClose={() => setBookmarksOpen(false)}
+            onAddBookmark={addBookmark}
+            onRemoveBookmark={removeBookmark}
+            onJump={(target: ReaderTarget) => {
+              setContentsOpen(false);
+              setJump({ cfi: target.cfi, page: target.page, nonce: Date.now() });
+            }}
+            onClose={() => setContentsOpen(false)}
           />
         )}
 
@@ -388,7 +398,7 @@ export function ReaderView({ id }: { id: string }) {
         {location.page ? `Page ${location.page}${location.total || book?.pages ? ` of ${location.total ?? book?.pages}` : ""}` : ""}
       </p>
 
-      {selection && !translateFor && (
+      {selection && !translateFor && !defineFor && (
         <SelectionToolbar
           selection={selection}
           onHighlight={(color) => void addAnnotation("highlight", color)}
@@ -397,7 +407,29 @@ export function ReaderView({ id }: { id: string }) {
             setTranslateFor(selection);
             setSelection(null);
           }}
+          onDefine={
+            isSingleWord(selection.text)
+              ? () => {
+                  setDefineFor(selection);
+                  setSelection(null);
+                }
+              : undefined
+          }
           onDismiss={clearSelection}
+        />
+      )}
+
+      {defineFor && (
+        <DefinePopover
+          selection={defineFor}
+          onClose={() => {
+            setDefineFor(null);
+            clearSelection();
+          }}
+          onTranslate={() => {
+            setTranslateFor(defineFor);
+            setDefineFor(null);
+          }}
         />
       )}
 

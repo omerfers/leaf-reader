@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Book, Rendition } from "epubjs";
 import type { Annotation, ReaderSettings } from "@/lib/types";
+import type { ReaderApi, SearchHit, TocEntry } from "@/lib/reader-api";
 import type { SelectionInfo } from "./TranslatePopover";
 
 const PALETTES: Record<ReaderSettings["theme"], { bg: string; ink: string; soft: string; accent: string }> = {
@@ -25,6 +26,7 @@ export function EpubReader({
   onSelect,
   onClearSelection,
   onBookTap,
+  onReady,
 }: {
   file: Blob;
   initialCfi?: string;
@@ -35,6 +37,7 @@ export function EpubReader({
   onSelect: (selection: SelectionInfo) => void;
   onClearSelection: () => void;
   onBookTap?: () => void;
+  onReady?: (api: ReaderApi) => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<Book | null>(null);
@@ -48,13 +51,15 @@ export function EpubReader({
     selectRef.current = onSelect;
     clearRef.current = onClearSelection;
     tapRef.current = onBookTap;
-  }, [onBookTap, onClearSelection, onSelect, settings]);
+    readyRef.current = onReady;
+  }, [onBookTap, onClearSelection, onReady, onSelect, settings]);
 
   const turnRef = useRef<(direction: "next" | "prev") => void>(() => {});
   const navSeq = useRef(0);
   const selectRef = useRef(onSelect);
   const clearRef = useRef(onClearSelection);
   const tapRef = useRef(onBookTap);
+  const readyRef = useRef(onReady);
   const languageRef = useRef<string | undefined>(undefined);
   const annotationsRef = useRef<Annotation[]>([]);
 
@@ -154,6 +159,17 @@ export function EpubReader({
         if (!doc || bound.has(doc)) return;
         bound.add(doc);
         doc.addEventListener("pointerdown", () => tapRef.current?.());
+        doc.addEventListener("click", (event: MouseEvent) => {
+          if (settingsRef.current.tapToTurn === false) return;
+          const target = event.target as Element | null;
+          if (target?.closest?.("a, button, input, select, textarea, label")) return;
+          const selection = doc.getSelection();
+          if (selection && !selection.isCollapsed) return;
+          const width = doc.defaultView?.innerWidth || 1;
+          const x = event.clientX / width;
+          if (x < 0.25) turnRef.current("prev");
+          else if (x > 0.75) turnRef.current("next");
+        });
         if (languageRef.current && !doc.documentElement.lang) {
           doc.documentElement.lang = languageRef.current;
         }
@@ -319,11 +335,108 @@ export function EpubReader({
           ?.metadata?.language;
         if (language) languageRef.current = language.toLowerCase().split("-")[0];
         const spine = book.spine as unknown as {
-          spineItems?: Array<{ linear: boolean; href: string }>;
+          spineItems?: Array<{
+            linear: boolean;
+            href: string;
+            next: () => unknown;
+            prev: () => unknown;
+          }>;
         };
         const items = spine.spineItems ?? [];
-        for (const item of items) item.linear = true;
+        // epub.js builds each section's next()/prev() from the linear flags when
+        // the book is parsed, so the links must be rebuilt along with the flag.
+        items.forEach((item, index) => {
+          item.linear = true;
+          item.next = () => items[index + 1];
+          item.prev = () => items[index - 1];
+        });
         const firstHref = items[0]?.href;
+        type SpineSection = {
+          href: string;
+          contents?: unknown;
+          document?: Document;
+          load: (request: unknown) => Promise<unknown>;
+          unload: () => void;
+          find: (q: string) => Array<{ cfi: string; excerpt: string }>;
+          cfiFromElement: (el: Element) => string;
+        };
+        const sectionFor = (path: string) =>
+          items.find(
+            (item) => item.href === path || decodeURI(item.href) === decodeURI(path),
+          ) as unknown as SpineSection | undefined;
+        // A contents entry such as chapter.xhtml#ch2 names a spot inside a file.
+        // Resolve it to a CFI so the reader lands on that heading, not on a
+        // horizontal offset inside the file.
+        const resolveHref = async (href: string): Promise<string> => {
+          const [path, fragment] = href.split("#");
+          const section = sectionFor(path);
+          if (!section || !fragment) return path;
+          const wasLoaded = Boolean(section.contents);
+          try {
+            if (!wasLoaded) await section.load(book.load.bind(book));
+            const el = section.document?.getElementById(decodeURIComponent(fragment));
+            return el ? section.cfiFromElement(el) : path;
+          } catch {
+            return path;
+          } finally {
+            if (!wasLoaded) section.unload();
+          }
+        };
+        const buildToc = async (): Promise<TocEntry[]> => {
+          const nav = (await book.loaded.navigation) as unknown as {
+            toc?: Array<{ label?: string; href?: string; subitems?: unknown[] }>;
+          };
+          const out: TocEntry[] = [];
+          const walk = (list: typeof nav.toc, depth: number) => {
+            for (const item of list ?? []) {
+              const label = (item.label ?? "").replace(/\s+/g, " ").trim();
+              if (label && item.href) out.push({ label, depth, target: { cfi: item.href } });
+              walk(item.subitems as typeof nav.toc, depth + 1);
+            }
+          };
+          walk(nav.toc, 0);
+          for (const entry of out) {
+            if (entry.target.cfi?.includes("#")) {
+              entry.target = { cfi: await resolveHref(entry.target.cfi) };
+            }
+          }
+          return out;
+        };
+        let tocCache: Promise<TocEntry[]> | null = null;
+
+        readyRef.current?.({
+          toc: () => {
+            tocCache ??= buildToc();
+            return tocCache;
+          },
+          search: async (query, { signal, onProgress, limit }) => {
+            const needle = query.trim();
+            const hits: SearchHit[] = [];
+            if (!needle) return hits;
+            for (let index = 0; index < items.length; index += 1) {
+              if (signal.aborted) break;
+              const section = items[index] as unknown as SpineSection;
+              // a section that is on screen shares its document, so only unload
+              // the ones this search loaded itself
+              const wasLoaded = Boolean(section.contents);
+              try {
+                if (!wasLoaded) await section.load(book.load.bind(book));
+                for (const match of section.find(needle)) {
+                  hits.push({ excerpt: match.excerpt, target: { cfi: match.cfi } });
+                  if (hits.length >= limit) break;
+                }
+              } catch {
+                // a broken chapter should not stop the search
+              } finally {
+                if (!wasLoaded) section.unload();
+              }
+              onProgress(index + 1, items.length);
+              if (hits.length >= limit) break;
+              await new Promise((resolve) => window.setTimeout(resolve, 0));
+            }
+            return hits;
+          },
+        });
         await rendition.display(initialCfi || firstHref || undefined);
         if (!cancelled) setState("ready");
         drawAnnotations();
@@ -447,18 +560,23 @@ export function EpubReader({
       setTurning(direction);
       window.setTimeout(() => setTurning(null), 360);
       const step = direction === "next" ? 1 : -1;
-      const before = readLocation().index;
-      void Promise.resolve(direction === "next" ? rendition.next() : rendition.prev()).then(
-        () => {
-          window.setTimeout(() => {
-            const after = readLocation().index;
-            if (before === undefined) return;
-            if (after !== undefined && after !== before) return;
-            // The pagination manager can stall right after a display() jump.
-            void goToPage(before + 1 + step);
-          }, 320);
-        },
-      );
+      const readCfi = () =>
+        (rendition.currentLocation?.() as unknown as { start?: { cfi?: string } } | undefined)?.start
+          ?.cfi;
+      const beforeCfi = readCfi();
+      const beforeIndex = readLocation().index;
+      void Promise.resolve(direction === "next" ? rendition.next() : rendition.prev()).then(() => {
+        window.setTimeout(() => {
+          // Judge the move by the reading position, not the page index: title,
+          // copyright and picture pages have no index, so an index check would
+          // mistake a real move for a stall and skip ahead to the text.
+          const afterCfi = readCfi();
+          if (afterCfi && afterCfi !== beforeCfi) return;
+          if (beforeIndex === undefined) return;
+          // The pagination manager can stall right after a display() jump.
+          void goToPage(beforeIndex + 1 + step);
+        }, 320);
+      });
     },
     [goToPage, onClearSelection, readLocation, turning],
   );
