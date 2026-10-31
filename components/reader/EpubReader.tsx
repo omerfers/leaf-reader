@@ -383,6 +383,18 @@ export function EpubReader({
       if (!rendition) return;
       const desired = Math.max(0, Math.round(desiredPage) - 1);
       const seq = ++navSeq.current;
+      if (desired === 0) {
+        // The first location chunk is the first *text*, which sits after the
+        // cover and title pages; page one should be the very first page.
+        const spine = bookRef.current?.spine as unknown as
+          | { spineItems?: Array<{ href: string }> }
+          | undefined;
+        const firstHref = spine?.spineItems?.[0]?.href;
+        if (firstHref) {
+          await rendition.display(firstHref);
+          return;
+        }
+      }
       const cfi = locations?.cfiFromLocation?.(desired);
       if (cfi) {
         await rendition.display(cfi);
