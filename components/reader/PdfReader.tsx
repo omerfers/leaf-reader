@@ -36,6 +36,7 @@ export function PdfReader({
   const [page, setPage] = useState(initialPage ?? 1);
   const [total, setTotal] = useState(0);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [errorText, setErrorText] = useState("");
   const [turning, setTurning] = useState<"next" | "prev" | null>(null);
   const touchRef = useRef<{ x: number; y: number; at: number } | null>(null);
 
@@ -66,8 +67,11 @@ export function PdfReader({
         setState("ready");
         onProgress(page, doc.numPages, "");
       } catch (error) {
-        console.error(error);
-        if (!cancelled) setState("error");
+        console.error("[leaf] pdf open failed", error);
+        if (!cancelled) {
+          setErrorText(error instanceof Error ? error.message : String(error));
+          setState("error");
+        }
       }
     })();
     return () => {
@@ -327,10 +331,17 @@ export function PdfReader({
       {turning && <div className={`turn-sheet ${turning}`} />}
 
       {state !== "ready" && (
-        <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center bg-[var(--page)]">
-          <p className="text-xs tracking-[0.18em] text-[var(--muted)] uppercase">
-            {state === "loading" ? "Setting the page…" : "This PDF could not be opened on this device."}
-          </p>
+        <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center bg-[var(--page)] px-6 text-center">
+          <div>
+            <p className="text-xs tracking-[0.18em] text-[var(--muted)] uppercase">
+              {state === "loading" ? "Setting the page…" : "This PDF could not be opened on this device."}
+            </p>
+            {state === "error" && errorText && (
+              <p className="mt-3 max-w-sm text-[11px] normal-case tracking-normal text-[var(--muted)]/80">
+                {errorText}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
