@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Book, Rendition } from "epubjs";
 import type { Annotation, ReaderSettings } from "@/lib/types";
 import type { ReaderApi, SearchHit, TocEntry } from "@/lib/reader-api";
+import { touchPrimary } from "@/lib/input";
 import type { SelectionInfo } from "./TranslatePopover";
 
 const PALETTES: Record<ReaderSettings["theme"], { bg: string; ink: string; soft: string; accent: string }> = {
@@ -160,7 +161,8 @@ export function EpubReader({
         bound.add(doc);
         doc.addEventListener("pointerdown", () => tapRef.current?.());
         doc.addEventListener("click", (event: MouseEvent) => {
-          if (settingsRef.current.tapToTurn === false) return;
+          // Edge taps are for fingers; on a trackpad or mouse they turn pages by accident.
+          if (settingsRef.current.tapToTurn === false || !touchPrimary()) return;
           const target = event.target as Element | null;
           if (target?.closest?.("a, button, input, select, textarea, label")) return;
           const selection = doc.getSelection();

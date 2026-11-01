@@ -32,11 +32,13 @@ always run the latest version — reinstall only when you want the newest wrappe
   and all settings are stored locally.
 - **Light / sepia / dark** — for the shelf and the page; follows your system
   theme on first run.
-- **Contents, search, bookmarks** — one panel with the book's table of contents,
-  a full-text search of the whole book, and your bookmarks.
+- **Contents, search, bookmarks, highlights** — one panel with the book's table of
+  contents, a full-text search of the whole book, your bookmarks, and every
+  highlight and underline (jump to one or remove it; Undo is offered right away).
 - **Define** — select a single English word for its dictionary definition.
-- **Tap to turn** — on EPUBs, tap the left or right quarter of the page to turn it
-  (switch it off in reading settings).
+- **Tap to turn** — on phones and tablets, tap the left or right edge of the page
+  to turn it (switch it off in reading settings). Computers use the keyboard, so a
+  trackpad click never turns a page by accident.
 - **Keyboard** — `←` / `→` (or `PageUp` / `PageDown`) to turn pages, `Esc` closes
   the open panel or card.
 

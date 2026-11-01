@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Annotation, ReaderSettings } from "@/lib/types";
 import type { SelectionInfo } from "./TranslatePopover";
+import { useTouchPrimary } from "@/lib/input";
 import { loadPdfJs } from "@/lib/pdfjs";
 import { excerptAround, type ReaderApi, type SearchHit, type TocEntry } from "@/lib/reader-api";
 
@@ -90,6 +91,8 @@ export function PdfReader({
   }, [file]);
 
   const zoom = settings.pdfZoom ?? 1;
+  // Side buttons turn pages for fingers only; a trackpad click should not flip the page.
+  const touch = useTouchPrimary();
 
   const paint = useCallback(async () => {
     const doc = docRef.current;
@@ -356,20 +359,24 @@ export function PdfReader({
       </div>
       </div>
 
-      <button
-        type="button"
-        aria-label="Previous page"
-        onClick={() => go("prev")}
-        disabled={page <= 1}
-        className="absolute inset-y-0 left-0 z-10 w-[14%] cursor-w-resize disabled:cursor-default sm:w-[8%]"
-      />
-      <button
-        type="button"
-        aria-label="Next page"
-        onClick={() => go("next")}
-        disabled={page >= total}
-        className="absolute inset-y-0 right-0 z-10 w-[14%] cursor-e-resize disabled:cursor-default sm:w-[8%]"
-      />
+      {touch && (
+        <>
+          <button
+            type="button"
+            aria-label="Previous page"
+            onClick={() => go("prev")}
+            disabled={page <= 1}
+            className="absolute inset-y-0 left-0 z-10 w-[14%] disabled:cursor-default"
+          />
+          <button
+            type="button"
+            aria-label="Next page"
+            onClick={() => go("next")}
+            disabled={page >= total}
+            className="absolute inset-y-0 right-0 z-10 w-[14%] disabled:cursor-default"
+          />
+        </>
+      )}
 
       {turning && <div className={`turn-sheet ${turning}`} />}
 

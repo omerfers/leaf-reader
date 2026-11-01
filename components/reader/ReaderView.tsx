@@ -46,6 +46,7 @@ export function ReaderView({ id }: { id: string }) {
   const [readerApi, setReaderApi] = useState<ReaderApi | null>(null);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [undo, setUndo] = useState<{ annotation: Annotation; index: number } | null>(null);
   const [translateFor, setTranslateFor] = useState<SelectionInfo | null>(null);
   const [defineFor, setDefineFor] = useState<SelectionInfo | null>(null);
   const [location, setLocation] = useState<{ cfi?: string; page?: number; total?: number; percent: number; excerpt: string }>(
@@ -202,6 +203,32 @@ export function ReaderView({ id }: { id: string }) {
     [bookmarks, id],
   );
 
+  const removeAnnotation = useCallback(
+    async (annotation: Annotation) => {
+      const index = annotations.findIndex((item) => item.id === annotation.id);
+      const next = annotations.filter((item) => item.id !== annotation.id);
+      setAnnotations(next);
+      await saveAnnotations(id, next);
+      setUndo({ annotation, index: Math.max(0, index) });
+    },
+    [annotations, id],
+  );
+
+  const undoRemove = useCallback(async () => {
+    if (!undo) return;
+    const next = [...annotations];
+    next.splice(Math.min(undo.index, next.length), 0, undo.annotation);
+    setAnnotations(next);
+    await saveAnnotations(id, next);
+    setUndo(null);
+  }, [annotations, id, undo]);
+
+  useEffect(() => {
+    if (!undo) return;
+    const timer = window.setTimeout(() => setUndo(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [undo]);
+
   const addAnnotation = useCallback(
     async (kind: Annotation["kind"], color: string) => {
       if (!selection) return;
@@ -284,7 +311,7 @@ export function ReaderView({ id }: { id: string }) {
         <div className="flex items-center gap-1">
           <IconButton
             panelTrigger
-            label="Contents, search and bookmarks"
+            label="Contents, search, bookmarks and highlights"
             onClick={() => {
               setContentsOpen((open) => !open);
               setSettingsOpen(false);
@@ -359,6 +386,8 @@ export function ReaderView({ id }: { id: string }) {
             bookmarks={bookmarks}
             onAddBookmark={addBookmark}
             onRemoveBookmark={removeBookmark}
+            annotations={annotations}
+            onRemoveAnnotation={(annotation) => void removeAnnotation(annotation)}
             onJump={(target: ReaderTarget) => {
               setContentsOpen(false);
               setJump({ cfi: target.cfi, page: target.page, nonce: Date.now() });
@@ -397,6 +426,23 @@ export function ReaderView({ id }: { id: string }) {
       <p className="sr-only" role="status" aria-live="polite">
         {location.page ? `Page ${location.page}${location.total || book?.pages ? ` of ${location.total ?? book?.pages}` : ""}` : ""}
       </p>
+
+      {undo && (
+        <div
+          role="status"
+          data-panel
+          className="pop-in fixed bottom-12 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-[var(--ink)] py-2 pr-2 pl-4 text-[12px] text-[var(--bg)] shadow-[0_18px_40px_-20px_rgba(0,0,0,0.7)]"
+        >
+          <span>{undo.annotation.kind === "underline" ? "Underline" : "Highlight"} removed</span>
+          <button
+            type="button"
+            onClick={() => void undoRemove()}
+            className="h-9 rounded-full px-3 font-semibold text-[var(--accent)] hover:bg-black/10"
+          >
+            Undo
+          </button>
+        </div>
+      )}
 
       {selection && !translateFor && !defineFor && (
         <SelectionToolbar

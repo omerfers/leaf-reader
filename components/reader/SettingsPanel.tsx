@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReaderSettings, Theme } from "@/lib/types";
+import { useTouchPrimary } from "@/lib/input";
 
 const THEMES: Array<{ id: Theme; label: string; swatch: string; ink: string }> = [
   { id: "light", label: "Light", swatch: "#fffdf8", ink: "#2b2620" },
@@ -19,6 +20,7 @@ export function SettingsPanel({
   onChange: (patch: Partial<ReaderSettings>) => void;
   onClose: () => void;
 }) {
+  const touch = useTouchPrimary();
   return (
     <div
       data-panel
@@ -91,15 +93,17 @@ export function SettingsPanel({
             />
           </label>
 
-          <label className="mt-4 flex min-h-11 items-center justify-between text-[11px] font-medium">
-            Tap page edges to turn
-            <input
-              type="checkbox"
-              checked={settings.tapToTurn !== false}
-              onChange={(event) => onChange({ tapToTurn: event.target.checked })}
-              className="h-5 w-5 accent-[var(--accent)]"
-            />
-          </label>
+          {touch && (
+            <label className="mt-4 flex min-h-11 items-center justify-between text-[11px] font-medium">
+              Tap page edges to turn
+              <input
+                type="checkbox"
+                checked={settings.tapToTurn !== false}
+                onChange={(event) => onChange({ tapToTurn: event.target.checked })}
+                className="h-5 w-5 accent-[var(--accent)]"
+              />
+            </label>
+          )}
 
           <p className="mt-4 text-[11px] font-medium">Margins</p>
           <div className="mt-2 flex gap-2">

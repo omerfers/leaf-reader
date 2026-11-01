@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import type { Bookmark } from "@/lib/types";
+import type { Annotation, Bookmark } from "@/lib/types";
 import type { ReaderApi, ReaderTarget, SearchHit, TocEntry } from "@/lib/reader-api";
 
-export type ContentsTab = "contents" | "search" | "bookmarks";
+export type ContentsTab = "contents" | "search" | "bookmarks" | "highlights";
 
 const TABS: Array<{ id: ContentsTab; label: string }> = [
   { id: "contents", label: "Contents" },
   { id: "search", label: "Search" },
   { id: "bookmarks", label: "Bookmarks" },
+  { id: "highlights", label: "Highlights" },
 ];
 
 const SEARCH_LIMIT = 150;
@@ -21,6 +22,8 @@ export function ContentsPanel({
   bookmarks,
   onAddBookmark,
   onRemoveBookmark,
+  annotations,
+  onRemoveAnnotation,
   onJump,
   onClose,
 }: {
@@ -30,6 +33,8 @@ export function ContentsPanel({
   bookmarks: Bookmark[];
   onAddBookmark: () => void;
   onRemoveBookmark: (bookmark: Bookmark) => void;
+  annotations: Annotation[];
+  onRemoveAnnotation: (annotation: Annotation) => void;
   onJump: (target: ReaderTarget) => void;
   onClose: () => void;
 }) {
@@ -39,7 +44,7 @@ export function ContentsPanel({
       data-panel
       role="dialog"
       aria-labelledby={titleId}
-      className="pop-in absolute top-3 right-3 left-3 z-40 flex max-h-[75vh] flex-col rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-[0_26px_60px_-30px_rgba(0,0,0,0.6)] sm:left-auto sm:w-[320px]"
+      className="pop-in absolute top-3 right-3 left-3 z-40 flex max-h-[75vh] flex-col rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-[0_26px_60px_-30px_rgba(0,0,0,0.6)] sm:left-auto sm:w-[340px]"
     >
       <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] px-2 py-1">
         <h2 id={titleId} className="sr-only">
@@ -55,7 +60,7 @@ export function ContentsPanel({
               aria-selected={tab === item.id}
               aria-controls={`${titleId}-panel`}
               onClick={() => onTab(item.id)}
-              className={`h-10 flex-1 rounded-lg px-2 text-[11px] font-medium tracking-[0.04em] transition ${
+              className={`h-10 min-w-0 flex-1 rounded-lg px-1 text-[11px] font-medium tracking-[0.02em] transition ${
                 tab === item.id
                   ? "bg-[var(--accent)]/12 text-[var(--accent)]"
                   : "text-[var(--muted)] hover:bg-black/5 hover:text-[var(--ink)]"
@@ -85,6 +90,13 @@ export function ContentsPanel({
       >
         {tab === "contents" && <ContentsList api={api} onJump={onJump} />}
         {tab === "search" && <SearchList api={api} onJump={onJump} />}
+        {tab === "highlights" && (
+          <HighlightsList
+            annotations={annotations}
+            onJump={(annotation) => onJump({ cfi: annotation.cfi, page: annotation.page })}
+            onRemove={onRemoveAnnotation}
+          />
+        )}
         {tab === "bookmarks" && (
           <BookmarksList
             bookmarks={bookmarks}
@@ -319,5 +331,58 @@ export function BookmarksList({
         )}
       </div>
     </div>
+  );
+}
+
+function HighlightsList({
+  annotations,
+  onJump,
+  onRemove,
+}: {
+  annotations: Annotation[];
+  onJump: (annotation: Annotation) => void;
+  onRemove: (annotation: Annotation) => void;
+}) {
+  const ordered = [...annotations].sort((a, b) => b.createdAt - a.createdAt);
+  if (ordered.length === 0) {
+    return (
+      <p className="px-4 py-6 text-center text-[11px] leading-relaxed text-[var(--muted)]">
+        Select text and choose a colour, or underline, to mark it here.
+      </p>
+    );
+  }
+  return (
+    <ul className="px-2 py-2">
+      {ordered.map((annotation) => (
+        <li
+          key={annotation.id}
+          className="group flex items-start gap-2 rounded-lg px-2 py-2 hover:bg-black/[0.04]"
+        >
+          <span
+            aria-hidden="true"
+            className="mt-1.5 h-3 w-3 shrink-0 rounded-full border border-black/10"
+            style={{ backgroundColor: annotation.color }}
+          />
+          <button type="button" onClick={() => onJump(annotation)} className="min-w-0 flex-1 text-left">
+            <p className={`line-clamp-3 text-[12px] leading-snug text-[var(--ink)] ${annotation.kind === "underline" ? "underline decoration-2 underline-offset-2" : ""}`}>
+              {annotation.text}
+            </p>
+            <p className="mt-0.5 text-[10px] text-[var(--muted)]">
+              {annotation.kind === "underline" ? "Underline" : "Highlight"} · {new Date(annotation.createdAt).toLocaleDateString()}
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => onRemove(annotation)}
+            aria-label={`Remove ${annotation.kind === "underline" ? "underline" : "highlight"}: ${annotation.text.slice(0, 40)}`}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[var(--muted)] opacity-100 transition hover:bg-red-500/10 hover:text-red-600 sm:h-8 sm:w-8 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+            </svg>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
