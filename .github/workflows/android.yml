@@ -32,8 +32,14 @@ jobs:
       - name: Build the app and copy it into the Android project
         run: npm run build:app
 
+      - name: Restore the release key
+        run: echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/leaf-release.p12"
+
       - name: Build APK
         working-directory: android
+        env:
+          LEAF_KEYSTORE: ${{ runner.temp }}/leaf-release.p12
+          LEAF_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Name the build

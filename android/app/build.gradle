@@ -4,7 +4,7 @@ android {
     namespace = "com.omerfers.leaf"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.omerfers.leaf"
+        applicationId "com.omerfers.leafapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -16,13 +16,26 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // The release key lives in GitHub secrets; every build signs with the same
+    // key, so each new APK installs over the last one.
+    signingConfigs {
+        release {
+            def keystore = System.getenv("LEAF_KEYSTORE")
+            if (keystore) {
+                storeFile file(keystore)
+                storeType "pkcs12"
+                storePassword System.getenv("LEAF_KEYSTORE_PASSWORD")
+                keyAlias "leaf"
+                keyPassword System.getenv("LEAF_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            // signed with the debug key so the APK installs when sideloaded;
-            // a Play Store release needs a real keystore
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
         }
     }
 }
