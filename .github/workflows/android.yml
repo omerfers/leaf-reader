@@ -33,6 +33,8 @@ jobs:
         run: npm run build:app
 
       - name: Restore the release key
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
         run: echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/leaf-release.p12"
 
       - name: Build APK
