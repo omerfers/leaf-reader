@@ -15,8 +15,9 @@ All installers live on the [v1.0 release](https://github.com/omerfers/leaf-reade
 | Linux | `Leaf-1.0.0.AppImage` |
 | Android | `Leaf-Android.apk` |
 
-The desktop and Android builds are thin shells around the hosted app, so they
-always run the latest version — reinstall only when you want the newest wrapper.
+The Android app is a standalone install: all of Leaf is inside the APK, so it
+works offline and needs no website. The desktop builds still load the hosted
+app, so they update with the website.
 
 ## What it does
 
@@ -41,6 +42,13 @@ always run the latest version — reinstall only when you want the newest wrappe
   trackpad click never turns a page by accident.
 - **Keyboard** — `←` / `→` (or `PageUp` / `PageDown`) to turn pages, `Esc` closes
   the open panel or card.
+
+## Android app
+
+The Android app is built from the same code as the website: `npm run build:app`
+exports the static site and copies it into the Capacitor project in `android/`,
+then `./gradlew assembleRelease` builds the APK. The Android workflow in
+GitHub Actions does this and attaches `Leaf-Android.apk` to the release.
 
 ## Desktop app
 

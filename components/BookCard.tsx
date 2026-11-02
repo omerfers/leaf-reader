@@ -33,7 +33,7 @@ export function BookCard({
 
   return (
     <div className="shelf-book group relative">
-      <Link href={`/read?id=${book.id}`} className="block outline-none" aria-label={`Read ${book.title}`}>
+      <Link href={`/read/?id=${book.id}`} className="block outline-none" aria-label={`Read ${book.title}`}>
         <div className="book-cover aspect-[2/3]">
           {book.cover ? (
             // eslint-disable-next-line @next/next/no-img-element
