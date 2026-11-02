@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
 import { PwaRegister } from "@/components/PwaRegister";
+import { NativeShell } from "@/components/NativeShell";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const serif = Source_Serif_4({
@@ -11,6 +12,7 @@ const serif = Source_Serif_4({
 });
 
 export const metadata: Metadata = {
+  manifest: "/manifest.webmanifest",
   title: "Leaf — a quieter reading app",
   description: "Your own books, a page at a time. EPUB and PDF, with translation on the page.",
 };
@@ -36,6 +38,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-full">
         <PwaRegister />
+        <NativeShell />
         {children}
       </body>
     </html>

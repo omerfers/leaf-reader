@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BookCard } from "@/components/BookCard";
 import { listBooks, removeBook, saveBook, getProgress } from "@/lib/db";
 import { ingestFile } from "@/lib/ingest";
+import { useTouchPrimary } from "@/lib/input";
 import type { BookMeta, Progress } from "@/lib/types";
 
 function useColumns() {
@@ -40,6 +41,7 @@ export default function ShelfPage() {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const columns = useColumns();
+  const touch = useTouchPrimary();
   const rows = useMemo(() => chunk(books, columns), [books, columns]);
 
   const refresh = useCallback(async () => {
@@ -155,7 +157,9 @@ export default function ShelfPage() {
             <input
               ref={inputRef}
               type="file"
-              accept=".epub,.pdf,application/epub+zip,application/pdf"
+              // On phones the picker filters by MIME type, and many books arrive as
+              // generic files, so every file is offered and the import checks them.
+              accept={touch ? "*/*" : ".epub,.pdf,application/epub+zip,application/pdf"}
               multiple
               className="hidden"
               onChange={(event) => {

@@ -5,6 +5,8 @@ import { useEffect } from "react";
 export function PwaRegister() {
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") return;
+    // the installed app ships its files; only the website needs a service worker
+    if (window.Capacitor?.isNativePlatform?.()) return;
     if (!("serviceWorker" in navigator)) return;
     const timer = window.setTimeout(() => {
       navigator.serviceWorker.register("/sw.js").catch(() => {});

@@ -17,7 +17,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: mobile/package-lock.json
 
       - uses: actions/setup-java@v4
         with:
@@ -27,36 +26,29 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Install
-        working-directory: mobile
         run: npm ci
 
-      - name: Generate the Android project
-        working-directory: mobile
-        run: npx expo prebuild --platform android --no-install
-
-      - name: Slim the build
-        working-directory: mobile/android
-        run: |
-          printf '\nreactNativeArchitectures=arm64-v8a\nandroid.enableBundleCompression=true\nandroid.enableShrinkResourcesInReleaseBuilds=true\n' >> gradle.properties
+      # the static web app is bundled into the APK, so nothing is fetched at runtime
+      - name: Build the app and copy it into the Android project
+        run: npm run build:app
 
       - name: Build APK
-        working-directory: mobile/android
+        working-directory: android
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Name the build
-        working-directory: mobile/android
-        run: cp app/build/outputs/apk/release/app-release.apk Leaf-Android.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk Leaf-Android.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: Leaf-Android
-          path: mobile/android/Leaf-Android.apk
+          path: Leaf-Android.apk
           if-no-files-found: error
 
       - name: Attach to the v1.0 release
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0
           name: Leaf v1.0
-          make_latest: true
-          files: mobile/android/Leaf-Android.apk
+          files: Leaf-Android.apk
